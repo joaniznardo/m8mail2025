@@ -140,6 +140,7 @@ topology:
     # mitjançant docker-compose. El script lab.sh setup 6 connecta els
     # contenidors de Mailcow a la xarxa del lab.
     # Aquest contenidor serveix com a punt d'entrada de xarxa per al domini.
+    # NOTA: ubuntu:24.04 minimal no té iproute2. La xarxa es configura via nsenter (lab.sh).
     mail-alumni:
       kind: linux
       image: ubuntu:24.04
@@ -148,11 +149,6 @@ topology:
       binds:
         - ../configs/mailcow/etapa6/:/opt/mailcow/:rw
         - ../certs/alumni/:/etc/ssl/mail/:ro
-      exec:
-        - ip addr add 10.26.50.30/24 dev eth1
-        - ip link set eth1 up
-        - bash -c "ip route add default via 10.26.50.1 || true"
-        - bash -c "echo 'nameserver 10.26.50.2' > /etc/resolv.conf"
 
     # --- THUNDERBIRD1 ---
     # NOTA: jlesage/thunderbird no té bash. Usem sh -c.

@@ -168,6 +168,16 @@ _post_deploy_network() {
             ok "Roundcube configurat: 10.26.50.102/24"
         fi
     fi
+
+    # Etapa 6: mail-alumni (ubuntu:24.04 minimal no té iproute2)
+    if [ "$stage" -ge 6 ]; then
+        local alumni_container="clab-${LAB_NAME}-mail-alumni"
+        if docker ps -q -f "name=${alumni_container}" | grep -q .; then
+            info "Configurant xarxa de mail-alumni via nsenter..."
+            _configure_node_network "$alumni_container" "10.26.50.30" "10.26.50.1" "10.26.50.2"
+            ok "mail-alumni configurat: 10.26.50.30/24"
+        fi
+    fi
 }
 
 _setup_dms_accounts() {
