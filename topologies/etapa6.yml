@@ -21,6 +21,17 @@ topology:
       image: mail-switch:latest
       startup-delay: 5
       exec:
+        - brctl addif br0 eth1
+        - brctl addif br0 eth2
+        - brctl addif br0 eth3
+        - brctl addif br0 eth4
+        - brctl addif br0 eth5
+        - brctl addif br0 eth6
+        - brctl addif br0 eth7
+        - brctl addif br0 eth8
+        - brctl addif br0 eth9
+        - brctl addif br0 eth10
+        - brctl addif br0 eth11
         - ip link set eth1 up
         - ip link set eth2 up
         - ip link set eth3 up
@@ -70,7 +81,7 @@ topology:
       exec:
         - ip addr add 10.26.50.3/24 dev eth1
         - ip link set eth1 up
-        - ip route add default via 10.26.50.1
+        - sh -c "ip route add default via 10.26.50.1 || true"
         - sh -c "echo 'nameserver 10.26.50.2' > /etc/resolv.conf"
 
     # --- MAIL-ALUMNAT ---
@@ -100,13 +111,13 @@ topology:
       binds:
         - ../configs/dms/etapa4/:/tmp/docker-mailserver/:rw
         - ../certs/alumnat/:/etc/ssl/mail/:ro
-      cap_add:
+      cap-add:
         - NET_ADMIN
         - SYS_PTRACE
       exec:
         - ip addr add 10.26.50.10/24 dev eth1
         - ip link set eth1 up
-        - ip route add default via 10.26.50.1
+        - bash -c "ip route add default via 10.26.50.1 || true"
         - bash -c "echo 'nameserver 10.26.50.2' > /etc/resolv.conf"
 
     # --- MAIL-PROFESSORAT ---
@@ -140,7 +151,7 @@ topology:
       exec:
         - ip addr add 10.26.50.30/24 dev eth1
         - ip link set eth1 up
-        - ip route add default via 10.26.50.1
+        - bash -c "ip route add default via 10.26.50.1 || true"
         - bash -c "echo 'nameserver 10.26.50.2' > /etc/resolv.conf"
 
     # --- THUNDERBIRD1 ---
@@ -158,7 +169,7 @@ topology:
       exec:
         - ip addr add 10.26.50.100/24 dev eth1
         - ip link set eth1 up
-        - ip route add default via 10.26.50.1
+        - sh -c "ip route add default via 10.26.50.1 || true"
         - sh -c "echo 'nameserver 10.26.50.2' > /etc/resolv.conf"
 
     # --- THUNDERBIRD2 ---
@@ -176,7 +187,7 @@ topology:
       exec:
         - ip addr add 10.26.50.101/24 dev eth1
         - ip link set eth1 up
-        - ip route add default via 10.26.50.1
+        - sh -c "ip route add default via 10.26.50.1 || true"
         - sh -c "echo 'nameserver 10.26.50.2' > /etc/resolv.conf"
 
     # --- ROUNDCUBE ---
@@ -209,7 +220,7 @@ topology:
       exec:
         - ip addr add 10.26.50.250/24 dev eth1
         - ip link set eth1 up
-        - ip route add default via 10.26.50.1
+        - bash -c "ip route add default via 10.26.50.1 || true"
         - bash -c "echo 'nameserver 10.26.50.2' > /etc/resolv.conf"
 
     # --- CLIENT-SWAKS ---
@@ -222,7 +233,7 @@ topology:
       exec:
         - ip addr add 10.26.50.200/24 dev eth1
         - ip link set eth1 up
-        - ip route add default via 10.26.50.1
+        - bash -c "ip route add default via 10.26.50.1 || true"
         - bash -c "echo 'nameserver 10.26.50.2' > /etc/resolv.conf"
 
   links:

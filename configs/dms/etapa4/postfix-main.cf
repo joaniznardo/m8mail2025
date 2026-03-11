@@ -1,0 +1,4 @@
+# Afegir la xarxa del laboratori (10.26.50.0/24) a mynetworks
+# Això permet que els clients interns (Thunderbird, swaks, etc.) enviïn correu
+# sense autenticació SASL des de la xarxa del lab.
+mynetworks = 127.0.0.0/8 [::1]/128 [fe80::]/64 172.16.0.0/12 10.26.50.0/24

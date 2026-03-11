@@ -16,6 +16,11 @@ topology:
       image: mail-switch:latest
       startup-delay: 5
       exec:
+        - brctl addif br0 eth1
+        - brctl addif br0 eth2
+        - brctl addif br0 eth3
+        - brctl addif br0 eth4
+        - brctl addif br0 eth5
         - ip link set eth1 up
         - ip link set eth2 up
         - ip link set eth3 up
@@ -59,7 +64,7 @@ topology:
       exec:
         - ip addr add 10.26.50.3/24 dev eth1
         - ip link set eth1 up
-        - ip route add default via 10.26.50.1
+        - sh -c "ip route add default via 10.26.50.1 || true"
         - sh -c "echo 'nameserver 10.26.50.2' > /etc/resolv.conf"
 
     # --- MAIL-ALUMNAT ---
@@ -84,13 +89,13 @@ topology:
         LOG_LEVEL: debug
       binds:
         - ../configs/dms/etapa1/:/tmp/docker-mailserver/:rw
-      cap_add:
+      cap-add:
         - NET_ADMIN
         - SYS_PTRACE
       exec:
         - ip addr add 10.26.50.10/24 dev eth1
         - ip link set eth1 up
-        - ip route add default via 10.26.50.1
+        - bash -c "ip route add default via 10.26.50.1 || true"
         - bash -c "echo 'nameserver 10.26.50.2' > /etc/resolv.conf"
 
     # --- THUNDERBIRD1 ---
@@ -108,7 +113,7 @@ topology:
       exec:
         - ip addr add 10.26.50.100/24 dev eth1
         - ip link set eth1 up
-        - ip route add default via 10.26.50.1
+        - sh -c "ip route add default via 10.26.50.1 || true"
         - sh -c "echo 'nameserver 10.26.50.2' > /etc/resolv.conf"
 
   links:
