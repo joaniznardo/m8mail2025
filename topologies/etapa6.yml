@@ -141,7 +141,7 @@ topology:
       startup-delay: 15
       cmd: "bash -c 'sleep infinity'"
       binds:
-        - ../configs/mailcow/:/opt/mailcow/:rw
+        - ../configs/mailcow/etapa6/:/opt/mailcow/:rw
         - ../certs/alumni/:/etc/ssl/mail/:ro
       exec:
         - ip addr add 10.26.50.30/24 dev eth1

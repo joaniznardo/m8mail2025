@@ -229,7 +229,7 @@ cmd_setup() {
         2)
             _setup_dms_accounts
             info "Generant certificats Let's Encrypt..."
-            info "Executa: docker exec clab-${LAB_NAME}-acme bash /acme-certs.sh"
+            info "Executa: docker exec clab-${LAB_NAME}-acme bash /scripts/acme-certs.sh"
             ok "Setup etapa 2 completat"
             ;;
         3)
@@ -288,7 +288,7 @@ cmd_certs() {
 
     docker exec -e CF_DNS_API_TOKEN="${CF_DNS_API_TOKEN}" \
         -e DOMAINS="${domains}" \
-        "$acme_container" bash /acme-certs.sh
+        "$acme_container" bash /scripts/acme-certs.sh
 
     ok "Certificats generats per a: ${domains}"
 }

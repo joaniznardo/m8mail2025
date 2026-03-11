@@ -1,0 +1,1131 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Servidors de Correu Electrònic — Laboratori ASIX</title>
+    <link rel="stylesheet" href="reveal.js/dist/reset.css">
+    <link rel="stylesheet" href="reveal.js/dist/reveal.css">
+    <link rel="stylesheet" href="reveal.js/dist/theme/night.css">
+    <link rel="stylesheet" href="reveal.js/plugin/highlight/monokai.css">
+    <style>
+        :root {
+            --r-heading-text-transform: none;
+        }
+        .reveal h1, .reveal h2, .reveal h3 {
+            text-transform: none;
+        }
+        .reveal pre {
+            font-size: 0.55em;
+            width: 95%;
+        }
+        .reveal pre code {
+            max-height: 500px;
+        }
+        .reveal table {
+            font-size: 0.6em;
+        }
+        .reveal .small-text {
+            font-size: 0.65em;
+        }
+        .reveal .tiny-text {
+            font-size: 0.5em;
+        }
+        .columns {
+            display: flex;
+            gap: 2em;
+        }
+        .columns .col {
+            flex: 1;
+        }
+        .badge {
+            display: inline-block;
+            padding: 0.2em 0.6em;
+            border-radius: 0.3em;
+            font-size: 0.7em;
+            font-weight: bold;
+            margin: 0.2em;
+        }
+        .badge-1 { background: #2196F3; }
+        .badge-2 { background: #4CAF50; }
+        .badge-3 { background: #FF9800; }
+        .badge-4 { background: #F44336; }
+        .badge-5 { background: #9C27B0; }
+        .badge-6 { background: #795548; }
+        .highlight-box {
+            background: rgba(255,255,255,0.1);
+            border-left: 4px solid #4CAF50;
+            padding: 0.5em 1em;
+            margin: 0.5em 0;
+            text-align: left;
+            font-size: 0.75em;
+        }
+        .warning-box {
+            background: rgba(255,152,0,0.15);
+            border-left: 4px solid #FF9800;
+            padding: 0.5em 1em;
+            margin: 0.5em 0;
+            text-align: left;
+            font-size: 0.75em;
+        }
+        .reveal .diagram {
+            font-family: monospace;
+            font-size: 0.5em;
+            line-height: 1.4;
+            text-align: left;
+            background: rgba(0,0,0,0.3);
+            padding: 1em;
+            border-radius: 0.5em;
+        }
+        .port-table td:first-child {
+            font-weight: bold;
+            color: #4CAF50;
+        }
+    </style>
+</head>
+<body>
+<div class="reveal">
+<div class="slides">
+
+<!-- ============================================================ -->
+<!-- SECCIÓ 0: PORTADA                                            -->
+<!-- ============================================================ -->
+<section>
+    <h1>Servidors de Correu Electrònic</h1>
+    <h3>Laboratori amb Containerlab</h3>
+    <p class="small-text">
+        ASIX — Administració de Sistemes Informàtics en Xarxa<br>
+        docker-mailserver &bull; Stalwart &bull; Mailcow
+    </p>
+    <p class="tiny-text">
+        <span class="badge badge-1">Etapa 1</span>
+        <span class="badge badge-2">Etapa 2</span>
+        <span class="badge badge-3">Etapa 3</span>
+        <span class="badge badge-4">Etapa 4</span>
+        <span class="badge badge-5">Etapa 5</span>
+        <span class="badge badge-6">Etapa 6</span>
+    </p>
+</section>
+
+<!-- ============================================================ -->
+<!-- SECCIÓ 1: INTRODUCCIÓ AL CORREU ELECTRÒNIC                   -->
+<!-- ============================================================ -->
+<section>
+    <section>
+        <h2>1. El Correu Electrònic</h2>
+        <h4>Una mica d'història</h4>
+    </section>
+
+    <section>
+        <h3>Història breu</h3>
+        <ul>
+            <li class="fragment"><strong>1971</strong> — Ray Tomlinson envia el primer email (ARPANET)</li>
+            <li class="fragment"><strong>1982</strong> — Es publica l'RFC 821 (SMTP)</li>
+            <li class="fragment"><strong>1988</strong> — POP3 (RFC 1081)</li>
+            <li class="fragment"><strong>1996</strong> — IMAP4 (RFC 2060)</li>
+            <li class="fragment"><strong>2003</strong> — SPF (RFC 4408)</li>
+            <li class="fragment"><strong>2011</strong> — DKIM (RFC 6376)</li>
+            <li class="fragment"><strong>2012</strong> — DMARC</li>
+            <li class="fragment"><strong>2024</strong> — JMAP (RFC 8620) guanya tracció</li>
+        </ul>
+    </section>
+
+    <section>
+        <h3>Arquitectura del correu</h3>
+        <div class="diagram">
+<pre>
+  ┌─────────┐         ┌─────────┐         ┌─────────┐         ┌─────────┐
+  │   MUA   │──SMTP──▶│   MTA   │──SMTP──▶│   MTA   │──LMTP──▶│   MDA   │
+  │ (client)│  :587   │ (enviant)│  :25    │(receptor)│        │(entrega) │
+  └─────────┘         └─────────┘         └─────────┘         └────┬────┘
+   Thunderbird         Postfix             Postfix                  │
+   Roundcube                                                       ▼
+   swaks                                                    ┌─────────┐
+                                                            │  Mailbox│
+                                    ┌─────────┐             │ (buzó)  │
+                                    │   MUA   │◀──IMAP/POP──┘─────────┘
+                                    │(receptor)│    :993
+                                    └─────────┘
+</pre>
+        </div>
+        <div class="small-text">
+            <strong>MUA</strong>: Mail User Agent &bull;
+            <strong>MTA</strong>: Mail Transfer Agent &bull;
+            <strong>MDA</strong>: Mail Delivery Agent
+        </div>
+    </section>
+
+    <section>
+        <h3>Components clau</h3>
+        <div class="columns">
+            <div class="col">
+                <h4>Servidor</h4>
+                <ul class="small-text">
+                    <li><strong>Postfix</strong> — MTA (SMTP)</li>
+                    <li><strong>Dovecot</strong> — MDA/IMAP/POP3</li>
+                    <li><strong>Rspamd</strong> — Anti-spam/DKIM</li>
+                    <li><strong>ClamAV</strong> — Antivirus</li>
+                </ul>
+            </div>
+            <div class="col">
+                <h4>Client</h4>
+                <ul class="small-text">
+                    <li><strong>Thunderbird</strong> — Desktop</li>
+                    <li><strong>Roundcube</strong> — Webmail</li>
+                    <li><strong>SOGo</strong> — Groupware</li>
+                    <li><strong>swaks</strong> — CLI debug</li>
+                </ul>
+            </div>
+        </div>
+    </section>
+</section>
+
+<!-- ============================================================ -->
+<!-- SECCIÓ 2: PROTOCOLS                                          -->
+<!-- ============================================================ -->
+<section>
+    <section>
+        <h2>2. Protocols de Correu</h2>
+        <h4>SMTP, IMAP, POP3</h4>
+    </section>
+
+    <section>
+        <h3>SMTP — Simple Mail Transfer Protocol</h3>
+        <div class="columns">
+            <div class="col">
+                <ul class="small-text">
+                    <li>Protocol d'<strong>enviament</strong> de correu</li>
+                    <li>Basat en text (ASCII)</li>
+                    <li>Model <strong>push</strong></li>
+                    <li>Definit a l'RFC 5321</li>
+                </ul>
+            </div>
+            <div class="col">
+                <table class="port-table">
+                    <tr><td>Port 25</td><td>Transfer (MTA→MTA)</td></tr>
+                    <tr><td>Port 587</td><td>Submission (STARTTLS)</td></tr>
+                    <tr><td>Port 465</td><td>Submission (TLS implícit)</td></tr>
+                </table>
+            </div>
+        </div>
+        <pre><code class="language-text" data-trim>
+S: 220 mail.alumnat.demoasixcloud2025.cat ESMTP
+C: EHLO client.local
+S: 250-mail.alumnat.demoasixcloud2025.cat
+S: 250-STARTTLS
+S: 250-AUTH PLAIN LOGIN
+C: MAIL FROM:&lt;alumne1@alumnat.demoasixcloud2025.cat&gt;
+S: 250 2.1.0 Ok
+C: RCPT TO:&lt;alumne2@alumnat.demoasixcloud2025.cat&gt;
+S: 250 2.1.5 Ok
+C: DATA
+S: 354 End data with &lt;CR&gt;&lt;LF&gt;.&lt;CR&gt;&lt;LF&gt;
+C: Subject: Hola!
+C: Primer missatge de prova.
+C: .
+S: 250 2.0.0 Ok: queued
+C: QUIT
+        </code></pre>
+    </section>
+
+    <section>
+        <h3>IMAP — Internet Message Access Protocol</h3>
+        <div class="columns">
+            <div class="col">
+                <ul class="small-text">
+                    <li>Protocol de <strong>lectura</strong> de correu</li>
+                    <li>Missatges romanen al <strong>servidor</strong></li>
+                    <li>Suporta <strong>carpetes</strong> i <strong>cerca</strong></li>
+                    <li>Sincronització multi-dispositiu</li>
+                    <li>Definit a l'RFC 9051 (IMAP4rev2)</li>
+                </ul>
+            </div>
+            <div class="col">
+                <table class="port-table">
+                    <tr><td>Port 143</td><td>IMAP (STARTTLS)</td></tr>
+                    <tr><td>Port 993</td><td>IMAPS (TLS implícit)</td></tr>
+                </table>
+            </div>
+        </div>
+    </section>
+
+    <section>
+        <h3>POP3 vs IMAP</h3>
+        <table>
+            <thead><tr><th>Característica</th><th>POP3</th><th>IMAP</th></tr></thead>
+            <tbody>
+                <tr><td>Emmagatzematge</td><td>Client (descarrega)</td><td>Servidor</td></tr>
+                <tr><td>Multi-dispositiu</td><td>No</td><td>Sí</td></tr>
+                <tr><td>Carpetes</td><td>No</td><td>Sí</td></tr>
+                <tr><td>Cerca al servidor</td><td>No</td><td>Sí</td></tr>
+                <tr><td>Ample de banda</td><td>Baix (un cop)</td><td>Major (sync)</td></tr>
+                <tr><td>Ports</td><td>110 / 995</td><td>143 / 993</td></tr>
+                <tr><td>Ús recomanat</td><td>Dispositiu únic</td><td>General</td></tr>
+            </tbody>
+        </table>
+    </section>
+
+    <section>
+        <h3>JMAP — El futur?</h3>
+        <ul class="small-text">
+            <li><strong>JSON Meta Application Protocol</strong> (RFC 8620)</li>
+            <li>Substitueix IMAP amb una API <strong>JSON sobre HTTP</strong></li>
+            <li>Més eficient per a clients web i mòbils</li>
+            <li>Sincronització d'estat en lloc de comandes</li>
+            <li>Stalwart el suporta nativament</li>
+        </ul>
+        <pre><code class="language-json" data-trim>
+{
+  "using": ["urn:ietf:params:jmap:core", "urn:ietf:params:jmap:mail"],
+  "methodCalls": [
+    ["Email/query", {"filter": {"inMailbox": "inbox-id"}}, "0"],
+    ["Email/get", {"#ids": {"resultOf": "0"}}, "1"]
+  ]
+}
+        </code></pre>
+    </section>
+</section>
+
+<!-- ============================================================ -->
+<!-- SECCIÓ 3: DNS I EL CORREU                                    -->
+<!-- ============================================================ -->
+<section>
+    <section>
+        <h2>3. DNS i el Correu</h2>
+        <h4>MX, A, PTR i més</h4>
+    </section>
+
+    <section>
+        <h3>Registres DNS essencials</h3>
+        <table>
+            <thead><tr><th>Tipus</th><th>Nom</th><th>Valor</th><th>Funció</th></tr></thead>
+            <tbody class="small-text">
+                <tr><td><strong>MX</strong></td><td>alumnat.demo...</td><td>10 mail.alumnat.demo...</td><td>On enviar el correu</td></tr>
+                <tr><td><strong>A</strong></td><td>mail.alumnat.demo...</td><td>10.26.50.10</td><td>IP del servidor</td></tr>
+                <tr><td><strong>PTR</strong></td><td>10.50.26.10.in-addr.arpa</td><td>mail.alumnat.demo...</td><td>Resolució inversa</td></tr>
+                <tr><td><strong>TXT</strong></td><td>alumnat.demo...</td><td>v=spf1 mx ~all</td><td>SPF</td></tr>
+                <tr><td><strong>TXT</strong></td><td>mail._domainkey.alumnat...</td><td>v=DKIM1; k=rsa; p=...</td><td>DKIM</td></tr>
+                <tr><td><strong>TXT</strong></td><td>_dmarc.alumnat...</td><td>v=DMARC1; p=none...</td><td>DMARC</td></tr>
+            </tbody>
+        </table>
+    </section>
+
+    <section>
+        <h3>Flux de resolució DNS per enviar un correu</h3>
+        <div class="diagram">
+<pre>
+alumne1 vol enviar a profe1@professorat.demoasixcloud2025.cat
+
+1. MTA consulta: dig professorat.demoasixcloud2025.cat MX
+   → 10 mail.professorat.demoasixcloud2025.cat
+
+2. MTA consulta: dig mail.professorat.demoasixcloud2025.cat A
+   → 10.26.50.20
+
+3. MTA connecta a 10.26.50.20:25 via SMTP
+
+4. El receptor verifica:
+   - SPF: L'IP d'origen està autoritzada?
+   - DKIM: La signatura del missatge és vàlida?
+   - DMARC: Què fer si SPF/DKIM fallen?
+</pre>
+        </div>
+    </section>
+
+    <section>
+        <h3>Verificar DNS amb dig</h3>
+        <pre><code class="language-bash" data-trim>
+# Registre MX (on va el correu)
+dig @10.26.50.2 alumnat.demoasixcloud2025.cat MX
+
+# Registre A (IP del servidor)
+dig @10.26.50.2 mail.alumnat.demoasixcloud2025.cat A
+
+# Registre PTR (resolució inversa)
+dig @10.26.50.2 -x 10.26.50.10
+
+# Registre SPF
+dig @10.26.50.2 alumnat.demoasixcloud2025.cat TXT
+
+# Registre DKIM
+dig @10.26.50.2 mail._domainkey.alumnat.demoasixcloud2025.cat TXT
+
+# Registre DMARC
+dig @10.26.50.2 _dmarc.alumnat.demoasixcloud2025.cat TXT
+        </code></pre>
+    </section>
+</section>
+
+<!-- ============================================================ -->
+<!-- SECCIÓ 4: TLS/SSL                                            -->
+<!-- ============================================================ -->
+<section>
+    <section>
+        <h2>4. TLS i el Correu</h2>
+        <h4>Xifrat de les comunicacions</h4>
+    </section>
+
+    <section>
+        <h3>STARTTLS vs TLS implícit</h3>
+        <div class="columns">
+            <div class="col">
+                <h4>STARTTLS (explícit)</h4>
+                <ul class="small-text">
+                    <li>Comença en text pla</li>
+                    <li>Negocia TLS amb STARTTLS</li>
+                    <li>Ports 587 (SMTP), 143 (IMAP)</li>
+                    <li>Vulnerable a <em>downgrade attack</em></li>
+                </ul>
+            </div>
+            <div class="col">
+                <h4>TLS implícit</h4>
+                <ul class="small-text">
+                    <li>TLS des del primer byte</li>
+                    <li>No hi ha fase en text pla</li>
+                    <li>Ports 465 (SMTPS), 993 (IMAPS)</li>
+                    <li>Més segur</li>
+                </ul>
+            </div>
+        </div>
+    </section>
+
+    <section>
+        <h3>Certificats Let's Encrypt</h3>
+        <div class="highlight-box">
+            <strong>Validació DNS amb Cloudflare:</strong> L'autoritat certificadora verifica que controles el domini
+            creant un registre TXT temporal a la zona DNS.
+        </div>
+        <pre><code class="language-bash" data-trim>
+# Generar certificat amb acme.sh + Cloudflare DNS
+export CF_Token="el_teu_token"
+acme.sh --issue --dns dns_cf \
+    -d alumnat.demoasixcloud2025.cat \
+    -d mail.alumnat.demoasixcloud2025.cat \
+    --server letsencrypt --keylength 4096
+        </code></pre>
+        <pre><code class="language-bash" data-trim>
+# Verificar certificat amb openssl
+openssl s_client -connect 10.26.50.10:465 -quiet
+openssl s_client -starttls smtp -connect 10.26.50.10:587
+        </code></pre>
+    </section>
+
+    <section>
+        <h3>Sense TLS vs amb TLS</h3>
+        <div class="warning-box">
+            <strong>Sense TLS (Etapa 1):</strong> Les credencials viatgen en text pla.
+            Un atacant amb accés a la xarxa pot capturar usuaris i contrasenyes.
+        </div>
+        <pre><code class="language-text" data-trim>
+# Captura tcpdump sense TLS — es veu TOT:
+AUTH LOGIN
+YWx1bW5lMUBhbHVtbmF0Lg==    (base64 de l'usuari)
+QWx1bW5lMS4yMDI1            (base64 de la password!)
+        </code></pre>
+        <div class="highlight-box">
+            <strong>Amb TLS (Etapa 2):</strong> Tot el tràfic està xifrat.
+            La captura només mostra dades binàries il·legibles.
+        </div>
+    </section>
+</section>
+
+<!-- ============================================================ -->
+<!-- SECCIÓ 5: SPF, DKIM, DMARC                                  -->
+<!-- ============================================================ -->
+<section>
+    <section>
+        <h2>5. Autenticació del correu</h2>
+        <h4>SPF, DKIM, DMARC</h4>
+    </section>
+
+    <section>
+        <h3>SPF — Sender Policy Framework</h3>
+        <div class="diagram">
+<pre>
+Pregunta: "Qui pot enviar correu en nom de alumnat.demoasixcloud2025.cat?"
+
+DNS TXT: alumnat.demoasixcloud2025.cat → "v=spf1 mx ~all"
+
+  ┌──────────┐     SMTP      ┌──────────┐
+  │ Emissor  │──────────────▶│ Receptor │
+  │ IP: X.X  │               │          │
+  └──────────┘               └────┬─────┘
+                                  │
+                          Consulta SPF:
+                          "L'IP X.X està
+                           autoritzada per
+                           enviar des d'aquest
+                           domini?"
+                                  │
+                           ┌──────▼──────┐
+                           │ Sí → Accepta│
+                           │ No → ~all   │
+                           │   (softfail)│
+                           └─────────────┘
+</pre>
+        </div>
+    </section>
+
+    <section>
+        <h3>SPF — Sintaxi</h3>
+        <pre><code class="language-text" data-trim>
+v=spf1 mx ~all
+│      │   │
+│      │   └── ~all: softfail (marcar però no rebutjar)
+│      │       -all: hardfail (rebutjar)
+│      │       +all: pass (acceptar tot — MAI fer!)
+│      │
+│      └── mx: les IPs dels registres MX estan autoritzades
+│
+└── v=spf1: versió del registre SPF
+        </code></pre>
+        <p class="small-text">Altres mecanismes: <code>ip4:X.X.X.X</code>, <code>include:domini.com</code>, <code>a</code></p>
+    </section>
+
+    <section>
+        <h3>DKIM — DomainKeys Identified Mail</h3>
+        <div class="diagram">
+<pre>
+  ┌──────────┐                              ┌──────────┐
+  │ Emissor  │                              │ Receptor │
+  │   MTA    │                              │   MTA    │
+  └────┬─────┘                              └────┬─────┘
+       │                                         │
+  1. Signa el missatge                    3. Obté clau pública
+     amb clau PRIVADA                        del DNS:
+       │                                    mail._domainkey.
+       ▼                                    alumnat.demo...
+  ┌──────────┐        SMTP          ┌──────▼──────┐
+  │ Missatge │─────────────────────▶│  Verifica   │
+  │ + DKIM-  │                      │  signatura  │
+  │ Signature│                      │  amb clau   │
+  └──────────┘                      │  pública    │
+                                    └─────────────┘
+</pre>
+        </div>
+    </section>
+
+    <section>
+        <h3>DKIM — Capçalera de signatura</h3>
+        <pre><code class="language-text" data-trim>
+DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed;
+    d=alumnat.demoasixcloud2025.cat; s=mail;
+    h=from:to:subject:date:message-id;
+    bh=abc123...=;    ← hash del cos
+    b=xyz789...=;     ← signatura digital
+        </code></pre>
+        <div class="small-text">
+            <p><code>d=</code> domini &bull;
+            <code>s=</code> selector &bull;
+            <code>h=</code> capçaleres signades &bull;
+            <code>b=</code> signatura</p>
+        </div>
+    </section>
+
+    <section>
+        <h3>DMARC — Domain-based Message Authentication</h3>
+        <pre><code class="language-text" data-trim>
+_dmarc.alumnat.demoasixcloud2025.cat TXT
+    "v=DMARC1; p=none; rua=mailto:postmaster@alumnat.demoasixcloud2025.cat"
+
+Polítiques:
+  p=none       → Només monitoritzar (informes)
+  p=quarantine → Marcar com a spam si falla
+  p=reject     → Rebutjar el missatge
+        </code></pre>
+        <div class="highlight-box">
+            <strong>DMARC = SPF + DKIM + Política</strong><br>
+            Diu als receptors què fer quan SPF o DKIM fallen, i on enviar informes.
+        </div>
+    </section>
+
+    <section>
+        <h3>Verificació amb swaks</h3>
+        <pre><code class="language-bash" data-trim>
+# Enviar correu i examinar capçaleres d'autenticació
+swaks --to alumne1@alumnat.demoasixcloud2025.cat \
+      --from alumne2@alumnat.demoasixcloud2025.cat \
+      --server 10.26.50.10 --port 587 --tls \
+      --auth LOGIN \
+      --auth-user alumne2@alumnat.demoasixcloud2025.cat \
+      --auth-password 'Alumne2.2025'
+
+# Al correu rebut, buscar:
+# Authentication-Results: mail.alumnat.demoasixcloud2025.cat;
+#     spf=pass
+#     dkim=pass
+#     dmarc=pass
+        </code></pre>
+    </section>
+</section>
+
+<!-- ============================================================ -->
+<!-- SECCIÓ 6: SERVIDORS DE CORREU                                -->
+<!-- ============================================================ -->
+<section>
+    <section>
+        <h2>6. Servidors de Correu</h2>
+        <h4>DMS, Stalwart, Mailcow</h4>
+    </section>
+
+    <section>
+        <h3>docker-mailserver (DMS)</h3>
+        <div class="columns">
+            <div class="col">
+                <ul class="small-text">
+                    <li><strong>1 contenidor</strong> amb tot integrat</li>
+                    <li>Postfix + Dovecot + Rspamd</li>
+                    <li>Configuració per <strong>env vars</strong> i fitxers</li>
+                    <li>CLI: <code>setup email add</code></li>
+                    <li>Sense interfície web pròpia</li>
+                    <li>Lleuger i ben documentat</li>
+                </ul>
+            </div>
+            <div class="col">
+                <pre><code class="language-yaml" data-trim>
+# docker-compose.yml
+environment:
+  OVERRIDE_HOSTNAME: mail.alumnat...
+  ENABLE_RSPAMD: 1
+  SSL_TYPE: manual
+  SSL_CERT_PATH: /etc/ssl/mail/fullchain.pem
+  SSL_KEY_PATH: /etc/ssl/mail/key.pem
+                </code></pre>
+            </div>
+        </div>
+    </section>
+
+    <section>
+        <h3>Stalwart Mail Server</h3>
+        <div class="columns">
+            <div class="col">
+                <ul class="small-text">
+                    <li><strong>1 contenidor</strong>, escrit en Rust</li>
+                    <li>Tot integrat (SMTP, IMAP, JMAP)</li>
+                    <li>Configuració per <strong>TOML</strong> o web admin</li>
+                    <li><strong>Interfície web</strong> d'administració</li>
+                    <li>Genera DKIM/SPF/DMARC automàticament</li>
+                    <li>Suporta CalDAV/CardDAV</li>
+                </ul>
+            </div>
+            <div class="col">
+                <pre><code class="language-toml" data-trim>
+# config.toml
+[server]
+hostname = "mail.professorat..."
+
+[server.listener.smtp]
+bind = ["0.0.0.0:25"]
+protocol = "smtp"
+
+[certificate.default]
+cert = "/etc/ssl/mail/fullchain.pem"
+private-key = "/etc/ssl/mail/key.pem"
+                </code></pre>
+            </div>
+        </div>
+    </section>
+
+    <section>
+        <h3>Mailcow</h3>
+        <div class="columns">
+            <div class="col">
+                <ul class="small-text">
+                    <li><strong>~12 contenidors</strong> (microserveis)</li>
+                    <li>Postfix + Dovecot + Rspamd + SOGo</li>
+                    <li>MariaDB + Redis</li>
+                    <li><strong>Web UI completa</strong></li>
+                    <li>Configuració via <code>mailcow.conf</code></li>
+                    <li>Gestió via docker-compose</li>
+                </ul>
+            </div>
+            <div class="col">
+                <pre><code class="language-bash" data-trim>
+# Desplegar Mailcow
+git clone https://github.com/\
+  mailcow/mailcow-dockerized
+cd mailcow-dockerized
+./generate_config.sh
+docker compose up -d
+
+# Contenidors principals:
+# postfix-mailcow
+# dovecot-mailcow
+# nginx-mailcow
+# mysql-mailcow
+# redis-mailcow
+# rspamd-mailcow
+# sogo-mailcow
+                </code></pre>
+            </div>
+        </div>
+    </section>
+
+    <section>
+        <h3>Comparativa</h3>
+        <table>
+            <thead><tr><th></th><th>DMS</th><th>Stalwart</th><th>Mailcow</th></tr></thead>
+            <tbody class="small-text">
+                <tr><td>Contenidors</td><td>1</td><td>1</td><td>~12</td></tr>
+                <tr><td>Llenguatge</td><td>Bash/Config</td><td>Rust</td><td>PHP/Python</td></tr>
+                <tr><td>Web Admin</td><td>No</td><td>Sí</td><td>Sí (completa)</td></tr>
+                <tr><td>Webmail</td><td>No (extern)</td><td>No (extern)</td><td>SOGo integrat</td></tr>
+                <tr><td>JMAP</td><td>No</td><td>Sí</td><td>No</td></tr>
+                <tr><td>Config</td><td>Env vars</td><td>TOML/Web</td><td>mailcow.conf</td></tr>
+                <tr><td>DKIM</td><td>CLI manual</td><td>Auto</td><td>Web UI</td></tr>
+                <tr><td>Recursos</td><td>Mitjà</td><td>Baix</td><td>Alt</td></tr>
+                <tr><td>Complexitat</td><td>Baixa</td><td>Baixa</td><td>Alta</td></tr>
+            </tbody>
+        </table>
+    </section>
+</section>
+
+<!-- ============================================================ -->
+<!-- SECCIÓ 7: ETAPES DEL LABORATORI                              -->
+<!-- ============================================================ -->
+<section>
+    <section>
+        <h2>7. Etapes del Laboratori</h2>
+    </section>
+
+    <!-- ETAPA 1 -->
+    <section>
+        <h3><span class="badge badge-1">Etapa 1</span> Correu bàsic amb DMS</h3>
+        <div class="diagram">
+<pre>
+     ┌────────────┐
+     │ switch-lan │
+     └──┬──┬──┬──┬┘
+        │  │  │  │
+   ┌────┘  │  │  └────────┐
+   │       │  │            │
+┌──▼──┐ ┌──▼──┐ ┌────▼───┐ ┌──▼──────┐
+│router│ │ dns │ │  proxy │ │mail-    │
+│ .1   │ │ .2  │ │  .3    │ │alumnat  │
+└──────┘ └─────┘ └────────┘ │ .10     │
+                             └─────────┘
+                                  ▲
+                          SMTP:25 │ IMAP:143
+                                  │
+                          ┌───────▼──┐
+                          │thunderb. │
+                          │1  .100   │
+                          └──────────┘
+</pre>
+        </div>
+        <pre><code class="language-bash" data-trim>
+./lab.sh build && ./lab.sh deploy 1 && ./lab.sh setup 1
+        </code></pre>
+    </section>
+
+    <!-- ETAPA 2 -->
+    <section>
+        <h3><span class="badge badge-2">Etapa 2</span> Certificats TLS</h3>
+        <div class="highlight-box">
+            <strong>Nou:</strong> Contenidor ACME (acme.sh + Cloudflare DNS validation)<br>
+            Genera certificats reals de Let's Encrypt per al domini.
+        </div>
+        <pre><code class="language-bash" data-trim>
+# Configurar token Cloudflare
+cp .env.example .env
+# Editar .env amb CF_DNS_API_TOKEN
+
+# Desplegar i generar certificats
+./lab.sh deploy 2
+./lab.sh certs alumnat
+
+# Verificar TLS
+openssl s_client -connect 10.26.50.10:465 -quiet
+        </code></pre>
+        <p class="small-text">
+            Ports: <strong>25</strong> (transfer) →
+            <strong>587</strong> (STARTTLS) →
+            <strong>465</strong> (TLS implícit) →
+            <strong>993</strong> (IMAPS)
+        </p>
+    </section>
+
+    <!-- ETAPA 3 -->
+    <section>
+        <h3><span class="badge badge-3">Etapa 3</span> swaks — depuració SMTP</h3>
+        <pre><code class="language-bash" data-trim>
+# Enviar correu sense autenticació (port 25)
+swaks --to alumne1@alumnat.demoasixcloud2025.cat \
+      --from test@exemple.cat \
+      --server 10.26.50.10 --port 25
+
+# Enviar amb autenticació + TLS (port 587)
+swaks --to alumne1@alumnat.demoasixcloud2025.cat \
+      --from alumne2@alumnat.demoasixcloud2025.cat \
+      --server 10.26.50.10 --port 587 --tls \
+      --auth LOGIN \
+      --auth-user alumne2@alumnat.demoasixcloud2025.cat \
+      --auth-password 'Alumne2.2025' \
+      --header "Subject: Test swaks" \
+      --body "Enviat des de la terminal!"
+
+# TLS implícit (port 465)
+swaks --to alumne1@alumnat.demoasixcloud2025.cat \
+      --server 10.26.50.10 --port 465 --tlsc \
+      --auth LOGIN --auth-user alumne2@alumnat... \
+      --auth-password 'Alumne2.2025'
+        </code></pre>
+    </section>
+
+    <!-- ETAPA 4 -->
+    <section>
+        <h3><span class="badge badge-4">Etapa 4</span> DKIM, DMARC, SPF</h3>
+        <pre><code class="language-bash" data-trim>
+# Generar claus DKIM
+./lab.sh setup 4
+
+# Obtenir registre DNS per a Cloudflare
+docker exec clab-mailserver-lab-mail-alumnat \
+    setup config dkim domain alumnat.demoasixcloud2025.cat
+        </code></pre>
+
+        <table class="small-text">
+            <thead><tr><th>Registre</th><th>Tipus</th><th>Nom</th><th>Valor</th></tr></thead>
+            <tbody>
+                <tr><td>SPF</td><td>TXT</td><td>alumnat.demo...</td><td>v=spf1 mx ~all</td></tr>
+                <tr><td>DKIM</td><td>TXT</td><td>mail._domainkey.alumnat...</td><td>v=DKIM1; k=rsa; p=...</td></tr>
+                <tr><td>DMARC</td><td>TXT</td><td>_dmarc.alumnat...</td><td>v=DMARC1; p=none; rua=...</td></tr>
+            </tbody>
+        </table>
+    </section>
+
+    <!-- ETAPA 5 -->
+    <section>
+        <h3><span class="badge badge-5">Etapa 5</span> Stalwart + Roundcube</h3>
+        <div class="diagram">
+<pre>
+  ┌──────────────────────────────────────────────┐
+  │                 switch-lan                   │
+  └─┬───┬───┬───┬───┬───┬────┬────┬────┬────────┘
+    │   │   │   │   │   │    │    │    │
+  ┌─▼─┐│ ┌─▼─┐│ ┌─▼──┐│ ┌──▼──┐│ ┌──▼───┐
+  │rtr││ │dns││ │prxy││ │mail ││ │mail  │  ← NOU
+  │.1 ││ │.2 ││ │.3  ││ │alum.││ │prof. │
+  └───┘│ └───┘│ └────┘│ │.10  ││ │.20   │
+       │      │       │ └─────┘│ └──────┘
+    ┌──▼────┐ │    ┌──▼───┐ ┌──▼──────┐
+    │acme   │ │    │swaks │ │thunder. │
+    │.250   │ │    │.200  │ │1 .100   │
+    └───────┘ │    └──────┘ └─────────┘
+           ┌──▼──────┐  ┌──────────┐
+           │thunder. │  │roundcube │  ← NOU
+           │2 .101   │  │.102      │
+           └─────────┘  └──────────┘
+</pre>
+        </div>
+    </section>
+
+    <section>
+        <h3><span class="badge badge-5">Etapa 5</span> Codi significatiu</h3>
+        <div class="columns">
+            <div class="col">
+                <p class="small-text"><strong>Stalwart config.toml</strong></p>
+                <pre><code class="language-toml" data-trim>
+[server]
+hostname = "mail.professorat..."
+
+[server.listener.smtp]
+bind = ["0.0.0.0:25"]
+
+[server.listener.imaps]
+bind = ["0.0.0.0:993"]
+tls.implicit = true
+
+[authentication]
+fallback-admin.user = "admin"
+fallback-admin.secret = "Admin.2025"
+                </code></pre>
+            </div>
+            <div class="col">
+                <p class="small-text"><strong>Roundcube</strong></p>
+                <pre><code class="language-yaml" data-trim>
+# Containerlab topology
+roundcube:
+  kind: linux
+  image: roundcube/roundcubemail
+  env:
+    ROUNDCUBEMAIL_DEFAULT_HOST:
+      "10.26.50.20"
+    ROUNDCUBEMAIL_SMTP_SERVER:
+      "10.26.50.20"
+    ROUNDCUBEMAIL_SMTP_PORT: "587"
+    ROUNDCUBEMAIL_USERNAME_DOMAIN:
+      "professorat.demoasixcloud2025.cat"
+                </code></pre>
+            </div>
+        </div>
+    </section>
+
+    <!-- ETAPA 6 -->
+    <section>
+        <h3><span class="badge badge-6">Etapa 6</span> Mailcow</h3>
+        <div class="columns">
+            <div class="col small-text">
+                <p><strong>Arquitectura multi-contenidor:</strong></p>
+                <ul>
+                    <li>postfix-mailcow (SMTP)</li>
+                    <li>dovecot-mailcow (IMAP)</li>
+                    <li>nginx-mailcow (web)</li>
+                    <li>mysql-mailcow (BD)</li>
+                    <li>redis-mailcow (cache)</li>
+                    <li>rspamd-mailcow (spam)</li>
+                    <li>sogo-mailcow (webmail)</li>
+                    <li>... i més</li>
+                </ul>
+            </div>
+            <div class="col">
+                <pre><code class="language-bash" data-trim>
+# Desplegament
+./lab.sh deploy 6
+./lab.sh setup 6
+
+# El node mail-alumni
+# (10.26.50.30) actua com a
+# punt d'entrada per l'stack
+# complet de Mailcow
+
+# Registres DNS a Cloudflare:
+# MX  alumni.demo... →
+#     mail.alumni.demo...
+# TXT alumni.demo... →
+#     v=spf1 mx ~all
+# TXT _dmarc.alumni.demo... →
+#     v=DMARC1; p=none
+                </code></pre>
+            </div>
+        </div>
+    </section>
+</section>
+
+<!-- ============================================================ -->
+<!-- SECCIÓ 8: EINES DE DEPURACIÓ                                 -->
+<!-- ============================================================ -->
+<section>
+    <section>
+        <h2>8. Eines de Depuració</h2>
+        <h4>swaks, dig, tcpdump, openssl</h4>
+    </section>
+
+    <section>
+        <h3>swaks — Swiss Army Knife for SMTP</h3>
+        <pre><code class="language-bash" data-trim>
+# Opcions principals
+swaks --to &lt;destinatari&gt;      # Destinatari
+      --from &lt;remitent&gt;       # Remitent
+      --server &lt;ip&gt;           # Servidor SMTP
+      --port &lt;port&gt;           # Port (25/587/465)
+      --tls                   # Negociar STARTTLS
+      --tlsc                  # TLS implícit
+      --auth LOGIN            # Autenticació
+      --auth-user &lt;usuari&gt;    # Usuari
+      --auth-password &lt;pass&gt;  # Contrasenya
+      --header "Subject: ..."  # Capçalera personalitzada
+      --body "..."             # Cos del missatge
+      --attach @fitxer.pdf     # Adjunt
+        </code></pre>
+    </section>
+
+    <section>
+        <h3>tcpdump — Captures de paquets</h3>
+        <pre><code class="language-bash" data-trim>
+# Capturar tràfic SMTP
+./pcap.sh mail-alumnat eth1 "port 25"
+
+# Capturar tràfic IMAP
+./pcap.sh mail-alumnat eth1 "port 143 or port 993"
+
+# Capturar tot el tràfic de correu
+./pcap.sh mail-alumnat eth1 "port 25 or port 587 or port 465 or port 143 or port 993"
+
+# Obrir amb Wireshark
+wireshark mail-alumnat_eth1_20250311_120000.pcapng
+        </code></pre>
+        <div class="warning-box">
+            Compara les captures de l'<strong>Etapa 1</strong> (sense TLS, tot llegible)
+            amb les de l'<strong>Etapa 2</strong> (amb TLS, tot xifrat).
+        </div>
+    </section>
+
+    <section>
+        <h3>Logs del servidor</h3>
+        <pre><code class="language-bash" data-trim>
+# Veure logs en temps real
+./lab.sh logs mail-alumnat
+
+# Buscar errors de Postfix
+docker exec clab-mailserver-lab-mail-alumnat \
+    grep "reject\|error\|warning" /var/log/mail/mail.log
+
+# Estat dels serveis dins DMS
+docker exec clab-mailserver-lab-mail-alumnat \
+    supervisorctl status
+
+# Verificar cua de correu
+docker exec clab-mailserver-lab-mail-alumnat \
+    postqueue -p
+        </code></pre>
+    </section>
+</section>
+
+<!-- ============================================================ -->
+<!-- SECCIÓ 9: CLIENTS DE CORREU                                  -->
+<!-- ============================================================ -->
+<section>
+    <section>
+        <h2>9. Clients de Correu</h2>
+        <h4>Thunderbird, Roundcube, SOGo</h4>
+    </section>
+
+    <section>
+        <h3>Thunderbird (noVNC)</h3>
+        <div class="columns">
+            <div class="col small-text">
+                <p><strong>Accés:</strong> Via proxy Nginx</p>
+                <p><strong>Configuració del compte:</strong></p>
+                <ol>
+                    <li>Nom: Alumne 1</li>
+                    <li>Email: alumne1@alumnat...</li>
+                    <li>Password: Alumne1.2025</li>
+                    <li>IMAP: mail.alumnat... :993 (SSL/TLS)</li>
+                    <li>SMTP: mail.alumnat... :465 (SSL/TLS)</li>
+                </ol>
+            </div>
+            <div class="col">
+                <pre><code class="language-yaml" data-trim>
+# Containerlab topology
+thunderbird1:
+  kind: linux
+  image: jlesage/thunderbird
+  env:
+    DISPLAY_WIDTH: "1280"
+    DISPLAY_HEIGHT: "768"
+  ports:
+    - "5800:5800"
+  shm-size: 1gb
+                </code></pre>
+            </div>
+        </div>
+    </section>
+
+    <section>
+        <h3>Roundcube</h3>
+        <div class="columns">
+            <div class="col small-text">
+                <p><strong>Webmail lleuger</strong> basat en PHP</p>
+                <p><strong>Característiques:</strong></p>
+                <ul>
+                    <li>Interfície web responsive</li>
+                    <li>Suport per múltiples idiomes</li>
+                    <li>Gestió de contactes</li>
+                    <li>Plugins extensibles</li>
+                    <li>SQLite per defecte</li>
+                </ul>
+            </div>
+            <div class="col">
+                <pre><code class="language-yaml" data-trim>
+roundcube:
+  kind: linux
+  image: roundcube/roundcubemail
+  env:
+    ROUNDCUBEMAIL_DEFAULT_HOST:
+      "10.26.50.20"
+    ROUNDCUBEMAIL_DEFAULT_PORT:
+      "143"
+    ROUNDCUBEMAIL_SMTP_SERVER:
+      "10.26.50.20"
+    ROUNDCUBEMAIL_SMTP_PORT:
+      "587"
+                </code></pre>
+            </div>
+        </div>
+    </section>
+</section>
+
+<!-- ============================================================ -->
+<!-- SECCIÓ 10: RESUM                                             -->
+<!-- ============================================================ -->
+<section>
+    <section>
+        <h2>Resum del Laboratori</h2>
+    </section>
+
+    <section>
+        <h3>Xarxa del laboratori</h3>
+        <table class="small-text">
+            <thead><tr><th>Node</th><th>IP</th><th>Rol</th><th>Etapes</th></tr></thead>
+            <tbody>
+                <tr><td>router-frr</td><td>10.26.50.1</td><td>Gateway</td><td>1-6</td></tr>
+                <tr><td>coredns</td><td>10.26.50.2</td><td>DNS intern</td><td>1-6</td></tr>
+                <tr><td>proxy</td><td>10.26.50.3</td><td>Nginx</td><td>1-6</td></tr>
+                <tr><td>mail-alumnat</td><td>10.26.50.10</td><td>DMS</td><td>1-6</td></tr>
+                <tr><td>mail-professorat</td><td>10.26.50.20</td><td>Stalwart</td><td>5-6</td></tr>
+                <tr><td>mail-alumni</td><td>10.26.50.30</td><td>Mailcow</td><td>6</td></tr>
+                <tr><td>thunderbird1</td><td>10.26.50.100</td><td>Client</td><td>1-6</td></tr>
+                <tr><td>thunderbird2</td><td>10.26.50.101</td><td>Client</td><td>5-6</td></tr>
+                <tr><td>roundcube</td><td>10.26.50.102</td><td>Webmail</td><td>5-6</td></tr>
+                <tr><td>client-swaks</td><td>10.26.50.200</td><td>Debug</td><td>3-6</td></tr>
+                <tr><td>acme</td><td>10.26.50.250</td><td>Certificats</td><td>2-6</td></tr>
+            </tbody>
+        </table>
+    </section>
+
+    <section>
+        <h3>Dominis</h3>
+        <table>
+            <thead><tr><th>Subdomini</th><th>Servidor</th><th>IP</th></tr></thead>
+            <tbody>
+                <tr><td>alumnat.demoasixcloud2025.cat</td><td>docker-mailserver</td><td>10.26.50.10</td></tr>
+                <tr><td>professorat.demoasixcloud2025.cat</td><td>Stalwart</td><td>10.26.50.20</td></tr>
+                <tr><td>alumni.demoasixcloud2025.cat</td><td>Mailcow</td><td>10.26.50.30</td></tr>
+            </tbody>
+        </table>
+    </section>
+
+    <section>
+        <h3>Comandes clau</h3>
+        <pre><code class="language-bash" data-trim>
+# Cicle de vida del lab
+./lab.sh build              # Construir imatges
+./lab.sh deploy N            # Desplegar etapa N
+./lab.sh setup N             # Configurar etapa N
+./lab.sh status              # Estat del lab
+./lab.sh shell &lt;node&gt;        # Shell a un node
+./lab.sh logs &lt;node&gt;         # Logs d'un node
+./lab.sh certs "dominis"     # Generar certificats
+./lab.sh destroy             # Destruir tot
+
+# Captures de paquets
+./pcap.sh &lt;node&gt; eth1 "port 25"
+        </code></pre>
+    </section>
+
+    <section>
+        <h2>Preguntes?</h2>
+        <p class="small-text">
+            Repositori: <code>007-mailserver-lab</code><br>
+            Dominis: <code>*.demoasixcloud2025.cat</code><br>
+            Xarxa: <code>10.26.50.0/24</code>
+        </p>
+    </section>
+</section>
+
+</div>
+</div>
+
+<script src="reveal.js/dist/reveal.js"></script>
+<script src="reveal.js/plugin/highlight/highlight.js"></script>
+<script src="reveal.js/plugin/notes/notes.js"></script>
+<script>
+    Reveal.initialize({
+        hash: true,
+        slideNumber: true,
+        plugins: [ RevealHighlight, RevealNotes ]
+    });
+</script>
+</body>
+</html>

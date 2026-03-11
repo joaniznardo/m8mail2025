@@ -1,5 +1,5 @@
 # docker-mailserver: comptes d'usuari per al domini alumnat.demoasixcloud2025.cat
 # Format: email|{SHA512-CRYPT}hash_de_password
 # Passwords generades amb: doveadm pw -s SHA512-CRYPT -p "password"
-alumne1@alumnat.demoasixcloud2025.cat|{SHA512-CRYPT}$6$rounds=100000$placeholder1$placeholder1hashplaceholder1hashplaceholder1hashplaceholder1hashplaceholder1hashplaceholder1hash
-alumne2@alumnat.demoasixcloud2025.cat|{SHA512-CRYPT}$6$rounds=100000$placeholder2$placeholder2hashplaceholder2hashplaceholder2hashplaceholder2hashplaceholder2hashplaceholder2hash
+alumne1@alumnat.demoasixcloud2025.cat|{SHA512-CRYPT}$6$rounds=100000$cDsx.FzYXqCusXS8$N4TSZMubXCEr13Vcc6YmQFPVC/pVCpp8UINoin.MS8zqCrzqCICDIqJ8wcjMdFmQk7n.FplgY94dDHojPJaX10
+alumne2@alumnat.demoasixcloud2025.cat|{SHA512-CRYPT}$6$rounds=100000$NatXQ2Jj2h8IvLLC$fBTAv8qjQ5DOPPHzFsSDiLPzXhunhgZ8ei6gAVSbCu1iqARFe0LK1T3vm7dEwFZRRk5SiePgXrIiMMTuPnA7w1

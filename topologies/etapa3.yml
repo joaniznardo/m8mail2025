@@ -123,13 +123,13 @@ topology:
     acme:
       kind: linux
       image: mail-acme:latest
-      startup-delay: 20
+      startup-delay: 5
       env:
-        CF_DNS_API_TOKEN: ${CF_DNS_API_TOKEN}
-        DOMAINS: alumnat
+        CF_DNS_API_TOKEN: "${CF_DNS_API_TOKEN}"
+        DOMAINS: "alumnat"
       binds:
-        - ../certs/:/certs/
-        - ../scripts/acme-certs.sh:/acme-certs.sh:ro
+        - ../certs/:/certs/:rw
+        - ../scripts/acme-certs.sh:/scripts/acme-certs.sh:ro
       exec:
         - ip addr add 10.26.50.250/24 dev eth1
         - ip link set eth1 up
@@ -142,7 +142,7 @@ topology:
       image: mail-client-swaks:latest
       startup-delay: 20
       binds:
-        - ../scripts/client-swaks-init.sh:/init.sh:ro
+        - ../scripts/client-swaks-init.sh:/scripts/client-swaks-init.sh:ro
       exec:
         - ip addr add 10.26.50.200/24 dev eth1
         - ip link set eth1 up
