@@ -11,6 +11,10 @@ certs/
 # Credencials
 .env
 
+# Claus DKIM (es generen amb ./lab.sh setup)
+configs/dms/*/rspamd/dkim/*
+!configs/dms/*/rspamd/dkim/.gitkeep
+
 # Captures de paquets
 captures/
 *.pcap
