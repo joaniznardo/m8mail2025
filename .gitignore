@@ -12,6 +12,7 @@ certs/
 .env
 
 # Captures de paquets
+captures/
 *.pcap
 *.pcapng
 
