@@ -36,6 +36,8 @@ topology:
         - ip link set eth1 up
 
     # --- COREDNS ---
+    # NOTA: CoreDNS utilitza una imatge scratch (sense shell).
+    # La configuració de xarxa es fa post-desplegament via nsenter (lab.sh).
     coredns:
       kind: linux
       image: coredns/coredns:latest
@@ -44,10 +46,6 @@ topology:
       binds:
         - ../configs/coredns/Corefile:/etc/coredns/Corefile:ro
         - ../configs/coredns/zones/:/etc/coredns/zones/:ro
-      exec:
-        - ip addr add 10.26.50.2/24 dev eth1
-        - ip link set eth1 up
-        - ip route add default via 10.26.50.1
 
     # --- PROXY ---
     proxy:
@@ -62,7 +60,7 @@ topology:
         - ip addr add 10.26.50.3/24 dev eth1
         - ip link set eth1 up
         - ip route add default via 10.26.50.1
-        - bash -c "echo 'nameserver 10.26.50.2' > /etc/resolv.conf"
+        - sh -c "echo 'nameserver 10.26.50.2' > /etc/resolv.conf"
 
     # --- MAIL-ALUMNAT ---
     mail-alumnat:
@@ -81,13 +79,11 @@ topology:
         ENABLE_FAIL2BAN: "0"
         ENABLE_POSTGREY: "0"
         ENABLE_SPAMASSASSIN: "0"
-        SSL_TYPE: ""
         PERMIT_DOCKER: network
         ONE_DIR: "1"
         LOG_LEVEL: debug
       binds:
-        - ../configs/dms/etapa1/postfix-accounts.cf:/tmp/docker-mailserver/postfix-accounts.cf:ro
-        - ../configs/dms/etapa1/postfix-virtual.cf:/tmp/docker-mailserver/postfix-virtual.cf:ro
+        - ../configs/dms/etapa1/:/tmp/docker-mailserver/:rw
       cap_add:
         - NET_ADMIN
         - SYS_PTRACE
@@ -98,6 +94,7 @@ topology:
         - bash -c "echo 'nameserver 10.26.50.2' > /etc/resolv.conf"
 
     # --- THUNDERBIRD1 ---
+    # NOTA: jlesage/thunderbird no té bash. Usem sh -c.
     thunderbird1:
       kind: linux
       image: jlesage/thunderbird:latest
@@ -112,7 +109,7 @@ topology:
         - ip addr add 10.26.50.100/24 dev eth1
         - ip link set eth1 up
         - ip route add default via 10.26.50.1
-        - bash -c "echo 'nameserver 10.26.50.2' > /etc/resolv.conf"
+        - sh -c "echo 'nameserver 10.26.50.2' > /etc/resolv.conf"
 
   links:
     - endpoints: ["switch-lan:eth1", "router-frr:eth1"]

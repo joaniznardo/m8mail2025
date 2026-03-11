@@ -47,6 +47,8 @@ topology:
         - ip link set eth1 up
 
     # --- COREDNS ---
+    # NOTA: CoreDNS utilitza una imatge scratch (sense shell).
+    # La configuració de xarxa es fa post-desplegament via nsenter (lab.sh).
     coredns:
       kind: linux
       image: coredns/coredns:latest
@@ -55,10 +57,6 @@ topology:
       binds:
         - ../configs/coredns/Corefile:/etc/coredns/Corefile:ro
         - ../configs/coredns/zones/:/etc/coredns/zones/:ro
-      exec:
-        - ip addr add 10.26.50.2/24 dev eth1
-        - ip link set eth1 up
-        - ip route add default via 10.26.50.1
 
     # --- PROXY ---
     proxy:
@@ -73,7 +71,7 @@ topology:
         - ip addr add 10.26.50.3/24 dev eth1
         - ip link set eth1 up
         - ip route add default via 10.26.50.1
-        - bash -c "echo 'nameserver 10.26.50.2' > /etc/resolv.conf"
+        - sh -c "echo 'nameserver 10.26.50.2' > /etc/resolv.conf"
 
     # --- MAIL-ALUMNAT ---
     # docker-mailserver amb Rspamd (DKIM/DMARC/SPF)
@@ -113,20 +111,16 @@ topology:
 
     # --- MAIL-PROFESSORAT ---
     # Stalwart Mail Server per al domini professorat
+    # NOTA: stalwart no té la comanda ip. La xarxa es configura via nsenter (lab.sh).
     mail-professorat:
       kind: linux
-      image: stalwartlabs/mail-server:latest
+      image: stalwartlabs/stalwart:latest
       startup-delay: 15
       binds:
         - ../configs/stalwart/etapa5/:/opt/stalwart-mail/:rw
         - ../certs/professorat/:/etc/ssl/mail/:ro
       ports:
         - 8443:443
-      exec:
-        - ip addr add 10.26.50.20/24 dev eth1
-        - ip link set eth1 up
-        - ip route add default via 10.26.50.1
-        - bash -c "echo 'nameserver 10.26.50.2' > /etc/resolv.conf"
 
     # --- MAIL-ALUMNI ---
     # Placeholder per a Mailcow (alumni.demoasixcloud2025.cat)
@@ -150,6 +144,7 @@ topology:
         - bash -c "echo 'nameserver 10.26.50.2' > /etc/resolv.conf"
 
     # --- THUNDERBIRD1 ---
+    # NOTA: jlesage/thunderbird no té bash. Usem sh -c.
     thunderbird1:
       kind: linux
       image: jlesage/thunderbird:latest
@@ -164,9 +159,10 @@ topology:
         - ip addr add 10.26.50.100/24 dev eth1
         - ip link set eth1 up
         - ip route add default via 10.26.50.1
-        - bash -c "echo 'nameserver 10.26.50.2' > /etc/resolv.conf"
+        - sh -c "echo 'nameserver 10.26.50.2' > /etc/resolv.conf"
 
     # --- THUNDERBIRD2 ---
+    # NOTA: jlesage/thunderbird no té bash. Usem sh -c.
     thunderbird2:
       kind: linux
       image: jlesage/thunderbird:latest
@@ -181,9 +177,11 @@ topology:
         - ip addr add 10.26.50.101/24 dev eth1
         - ip link set eth1 up
         - ip route add default via 10.26.50.1
-        - bash -c "echo 'nameserver 10.26.50.2' > /etc/resolv.conf"
+        - sh -c "echo 'nameserver 10.26.50.2' > /etc/resolv.conf"
 
     # --- ROUNDCUBE ---
+    # NOTA: roundcube/roundcubemail no té la comanda ip.
+    # La configuració de xarxa es fa post-desplegament via nsenter (lab.sh).
     roundcube:
       kind: linux
       image: roundcube/roundcubemail:latest
@@ -196,11 +194,6 @@ topology:
         ROUNDCUBEMAIL_USERNAME_DOMAIN: professorat.demoasixcloud2025.cat
       ports:
         - 8081:80
-      exec:
-        - ip addr add 10.26.50.102/24 dev eth1
-        - ip link set eth1 up
-        - ip route add default via 10.26.50.1
-        - bash -c "echo 'nameserver 10.26.50.2' > /etc/resolv.conf"
 
     # --- ACME ---
     acme:

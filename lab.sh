@@ -118,10 +118,11 @@ _get_topology_file() {
 }
 
 _configure_node_network() {
-    # Configura la xarxa d'un node que no té shell (ex: coredns)
+    # Configura la xarxa d'un node que no té shell o no té ip (ex: coredns, stalwart, roundcube)
     local container=$1
     local ip=$2
     local gateway=$3
+    local dns=${4:-""}
 
     local pid
     pid=$(docker inspect -f '{{.State.Pid}}' "$container" 2>/dev/null)
@@ -129,6 +130,11 @@ _configure_node_network() {
         sudo nsenter -t "$pid" -n ip addr add "${ip}/24" dev eth1 2>/dev/null || true
         sudo nsenter -t "$pid" -n ip link set eth1 up 2>/dev/null || true
         sudo nsenter -t "$pid" -n ip route add default via "$gateway" 2>/dev/null || true
+        if [ -n "$dns" ]; then
+            # Configurar DNS resolver dins del contenidor
+            # Usem nsenter amb mount namespace per escriure resolv.conf
+            sudo nsenter -t "$pid" -m -n sh -c "echo 'nameserver ${dns}' > /etc/resolv.conf" 2>/dev/null || true
+        fi
     fi
 }
 
@@ -142,6 +148,25 @@ _post_deploy_network() {
         info "Configurant xarxa de CoreDNS via nsenter..."
         _configure_node_network "$coredns_container" "10.26.50.2" "10.26.50.1"
         ok "CoreDNS configurat: 10.26.50.2/24"
+    fi
+
+    # A partir de l'etapa 5: Stalwart i Roundcube no tenen la comanda ip
+    if [ "$stage" -ge 5 ]; then
+        # Stalwart (mail-professorat)
+        local stalwart_container="clab-${LAB_NAME}-mail-professorat"
+        if docker ps -q -f "name=${stalwart_container}" | grep -q .; then
+            info "Configurant xarxa de Stalwart via nsenter..."
+            _configure_node_network "$stalwart_container" "10.26.50.20" "10.26.50.1" "10.26.50.2"
+            ok "Stalwart configurat: 10.26.50.20/24"
+        fi
+
+        # Roundcube
+        local roundcube_container="clab-${LAB_NAME}-roundcube"
+        if docker ps -q -f "name=${roundcube_container}" | grep -q .; then
+            info "Configurant xarxa de Roundcube via nsenter..."
+            _configure_node_network "$roundcube_container" "10.26.50.102" "10.26.50.1" "10.26.50.2"
+            ok "Roundcube configurat: 10.26.50.102/24"
+        fi
     fi
 }
 

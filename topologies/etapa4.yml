@@ -39,6 +39,8 @@ topology:
         - ip link set eth1 up
 
     # --- COREDNS ---
+    # NOTA: CoreDNS utilitza una imatge scratch (sense shell).
+    # La configuració de xarxa es fa post-desplegament via nsenter (lab.sh).
     coredns:
       kind: linux
       image: coredns/coredns:latest
@@ -47,10 +49,6 @@ topology:
       binds:
         - ../configs/coredns/Corefile:/etc/coredns/Corefile:ro
         - ../configs/coredns/zones/:/etc/coredns/zones/:ro
-      exec:
-        - ip addr add 10.26.50.2/24 dev eth1
-        - ip link set eth1 up
-        - ip route add default via 10.26.50.1
 
     # --- PROXY ---
     proxy:
@@ -65,7 +63,7 @@ topology:
         - ip addr add 10.26.50.3/24 dev eth1
         - ip link set eth1 up
         - ip route add default via 10.26.50.1
-        - bash -c "echo 'nameserver 10.26.50.2' > /etc/resolv.conf"
+        - sh -c "echo 'nameserver 10.26.50.2' > /etc/resolv.conf"
 
     # --- MAIL-ALUMNAT ---
     # Rspamd activat: gestiona signatura DKIM + verificació DMARC/SPF
@@ -105,6 +103,7 @@ topology:
         - bash -c "echo 'nameserver 10.26.50.2' > /etc/resolv.conf"
 
     # --- THUNDERBIRD1 ---
+    # NOTA: jlesage/thunderbird no té bash. Usem sh -c.
     thunderbird1:
       kind: linux
       image: jlesage/thunderbird:latest
@@ -119,7 +118,7 @@ topology:
         - ip addr add 10.26.50.100/24 dev eth1
         - ip link set eth1 up
         - ip route add default via 10.26.50.1
-        - bash -c "echo 'nameserver 10.26.50.2' > /etc/resolv.conf"
+        - sh -c "echo 'nameserver 10.26.50.2' > /etc/resolv.conf"
 
     # --- ACME ---
     acme:
