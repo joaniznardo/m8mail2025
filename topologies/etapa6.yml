@@ -1,0 +1,246 @@
+# =============================================================================
+# Etapa 6: Mailcow (alumni)
+# Igual que etapa 5 però afegint mail-alumni per al domini alumni
+# NOTA: Mailcow és massa complex per desplegar com a nodes individuals dins
+# containerlab. S'utilitza un contenidor Ubuntu com a placeholder. El stack
+# real de Mailcow es desplega via docker-compose i es connecta a la xarxa
+# del lab mitjançant lab.sh setup 6.
+# =============================================================================
+name: mailserver-lab
+
+mgmt:
+  network: mailserver-mgmt
+  ipv4-subnet: 172.20.26.0/24
+
+topology:
+  nodes:
+
+    # --- SWITCH-LAN ---
+    switch-lan:
+      kind: linux
+      image: mail-switch:latest
+      startup-delay: 5
+      exec:
+        - ip link set eth1 up
+        - ip link set eth2 up
+        - ip link set eth3 up
+        - ip link set eth4 up
+        - ip link set eth5 up
+        - ip link set eth6 up
+        - ip link set eth7 up
+        - ip link set eth8 up
+        - ip link set eth9 up
+        - ip link set eth10 up
+        - ip link set eth11 up
+
+    # --- ROUTER-FRR ---
+    router-frr:
+      kind: linux
+      image: frrouting/frr:latest
+      startup-delay: 10
+      binds:
+        - ../configs/frr/daemons:/etc/frr/daemons
+        - ../configs/frr/frr.conf:/etc/frr/frr.conf
+        - ../configs/frr/vtysh.conf:/etc/frr/vtysh.conf
+      exec:
+        - ip addr add 10.26.50.1/24 dev eth1
+        - ip link set eth1 up
+
+    # --- COREDNS ---
+    coredns:
+      kind: linux
+      image: coredns/coredns:latest
+      startup-delay: 5
+      cmd: "-conf /etc/coredns/Corefile"
+      binds:
+        - ../configs/coredns/Corefile:/etc/coredns/Corefile:ro
+        - ../configs/coredns/zones/:/etc/coredns/zones/:ro
+      exec:
+        - ip addr add 10.26.50.2/24 dev eth1
+        - ip link set eth1 up
+        - ip route add default via 10.26.50.1
+
+    # --- PROXY ---
+    proxy:
+      kind: linux
+      image: nginx:alpine
+      startup-delay: 5
+      binds:
+        - ../configs/nginx/etapa6.conf:/etc/nginx/conf.d/default.conf:ro
+      ports:
+        - 8080:80
+      exec:
+        - ip addr add 10.26.50.3/24 dev eth1
+        - ip link set eth1 up
+        - ip route add default via 10.26.50.1
+        - bash -c "echo 'nameserver 10.26.50.2' > /etc/resolv.conf"
+
+    # --- MAIL-ALUMNAT ---
+    # docker-mailserver amb Rspamd (DKIM/DMARC/SPF)
+    mail-alumnat:
+      kind: linux
+      image: ghcr.io/docker-mailserver/docker-mailserver:latest
+      startup-delay: 15
+      env:
+        OVERRIDE_HOSTNAME: mail.alumnat.demoasixcloud2025.cat
+        POSTMASTER_ADDRESS: postmaster@alumnat.demoasixcloud2025.cat
+        ENABLE_CLAMAV: "0"
+        ENABLE_RSPAMD: "1"
+        ENABLE_OPENDKIM: "0"
+        ENABLE_OPENDMARC: "0"
+        ENABLE_POLICYD_SPF: "0"
+        ENABLE_AMAVIS: "0"
+        ENABLE_FAIL2BAN: "0"
+        ENABLE_POSTGREY: "0"
+        ENABLE_SPAMASSASSIN: "0"
+        SSL_TYPE: manual
+        SSL_CERT_PATH: /etc/ssl/mail/fullchain.pem
+        SSL_KEY_PATH: /etc/ssl/mail/key.pem
+        PERMIT_DOCKER: network
+        ONE_DIR: "1"
+        LOG_LEVEL: debug
+      binds:
+        - ../configs/dms/etapa4/:/tmp/docker-mailserver/:rw
+        - ../certs/alumnat/:/etc/ssl/mail/:ro
+      cap_add:
+        - NET_ADMIN
+        - SYS_PTRACE
+      exec:
+        - ip addr add 10.26.50.10/24 dev eth1
+        - ip link set eth1 up
+        - ip route add default via 10.26.50.1
+        - bash -c "echo 'nameserver 10.26.50.2' > /etc/resolv.conf"
+
+    # --- MAIL-PROFESSORAT ---
+    # Stalwart Mail Server per al domini professorat
+    mail-professorat:
+      kind: linux
+      image: stalwartlabs/mail-server:latest
+      startup-delay: 15
+      binds:
+        - ../configs/stalwart/etapa5/:/opt/stalwart-mail/:rw
+        - ../certs/professorat/:/etc/ssl/mail/:ro
+      ports:
+        - 8443:443
+      exec:
+        - ip addr add 10.26.50.20/24 dev eth1
+        - ip link set eth1 up
+        - ip route add default via 10.26.50.1
+        - bash -c "echo 'nameserver 10.26.50.2' > /etc/resolv.conf"
+
+    # --- MAIL-ALUMNI ---
+    # Placeholder per a Mailcow (alumni.demoasixcloud2025.cat)
+    # Mailcow requereix múltiples contenidors (postfix, dovecot, redis, mysql,
+    # nginx, php-fpm, rspamd, clamd, etc.) que es despleguen per separat
+    # mitjançant docker-compose. El script lab.sh setup 6 connecta els
+    # contenidors de Mailcow a la xarxa del lab.
+    # Aquest contenidor serveix com a punt d'entrada de xarxa per al domini.
+    mail-alumni:
+      kind: linux
+      image: ubuntu:24.04
+      startup-delay: 15
+      cmd: "bash -c 'sleep infinity'"
+      binds:
+        - ../configs/mailcow/:/opt/mailcow/:rw
+        - ../certs/alumni/:/etc/ssl/mail/:ro
+      exec:
+        - ip addr add 10.26.50.30/24 dev eth1
+        - ip link set eth1 up
+        - ip route add default via 10.26.50.1
+        - bash -c "echo 'nameserver 10.26.50.2' > /etc/resolv.conf"
+
+    # --- THUNDERBIRD1 ---
+    thunderbird1:
+      kind: linux
+      image: jlesage/thunderbird:latest
+      startup-delay: 20
+      shm-size: 1gb
+      env:
+        DISPLAY_WIDTH: "1280"
+        DISPLAY_HEIGHT: "768"
+      ports:
+        - 5800:5800
+      exec:
+        - ip addr add 10.26.50.100/24 dev eth1
+        - ip link set eth1 up
+        - ip route add default via 10.26.50.1
+        - bash -c "echo 'nameserver 10.26.50.2' > /etc/resolv.conf"
+
+    # --- THUNDERBIRD2 ---
+    thunderbird2:
+      kind: linux
+      image: jlesage/thunderbird:latest
+      startup-delay: 20
+      shm-size: 1gb
+      env:
+        DISPLAY_WIDTH: "1280"
+        DISPLAY_HEIGHT: "768"
+      ports:
+        - 5801:5800
+      exec:
+        - ip addr add 10.26.50.101/24 dev eth1
+        - ip link set eth1 up
+        - ip route add default via 10.26.50.1
+        - bash -c "echo 'nameserver 10.26.50.2' > /etc/resolv.conf"
+
+    # --- ROUNDCUBE ---
+    roundcube:
+      kind: linux
+      image: roundcube/roundcubemail:latest
+      startup-delay: 20
+      env:
+        ROUNDCUBEMAIL_DEFAULT_HOST: "10.26.50.20"
+        ROUNDCUBEMAIL_DEFAULT_PORT: "143"
+        ROUNDCUBEMAIL_SMTP_SERVER: "10.26.50.20"
+        ROUNDCUBEMAIL_SMTP_PORT: "587"
+        ROUNDCUBEMAIL_USERNAME_DOMAIN: professorat.demoasixcloud2025.cat
+      ports:
+        - 8081:80
+      exec:
+        - ip addr add 10.26.50.102/24 dev eth1
+        - ip link set eth1 up
+        - ip route add default via 10.26.50.1
+        - bash -c "echo 'nameserver 10.26.50.2' > /etc/resolv.conf"
+
+    # --- ACME ---
+    acme:
+      kind: linux
+      image: mail-acme:latest
+      startup-delay: 5
+      env:
+        CF_DNS_API_TOKEN: "${CF_DNS_API_TOKEN}"
+        DOMAINS: "alumnat professorat alumni"
+      binds:
+        - ../certs/:/certs/:rw
+        - ../scripts/acme-certs.sh:/scripts/acme-certs.sh:ro
+      exec:
+        - ip addr add 10.26.50.250/24 dev eth1
+        - ip link set eth1 up
+        - ip route add default via 10.26.50.1
+        - bash -c "echo 'nameserver 10.26.50.2' > /etc/resolv.conf"
+
+    # --- CLIENT-SWAKS ---
+    client-swaks:
+      kind: linux
+      image: mail-client-swaks:latest
+      startup-delay: 20
+      binds:
+        - ../scripts/client-swaks-init.sh:/scripts/client-swaks-init.sh:ro
+      exec:
+        - ip addr add 10.26.50.200/24 dev eth1
+        - ip link set eth1 up
+        - ip route add default via 10.26.50.1
+        - bash -c "echo 'nameserver 10.26.50.2' > /etc/resolv.conf"
+
+  links:
+    - endpoints: ["switch-lan:eth1", "router-frr:eth1"]
+    - endpoints: ["switch-lan:eth2", "coredns:eth1"]
+    - endpoints: ["switch-lan:eth3", "proxy:eth1"]
+    - endpoints: ["switch-lan:eth4", "mail-alumnat:eth1"]
+    - endpoints: ["switch-lan:eth5", "thunderbird1:eth1"]
+    - endpoints: ["switch-lan:eth6", "acme:eth1"]
+    - endpoints: ["switch-lan:eth7", "client-swaks:eth1"]
+    - endpoints: ["switch-lan:eth8", "mail-professorat:eth1"]
+    - endpoints: ["switch-lan:eth9", "thunderbird2:eth1"]
+    - endpoints: ["switch-lan:eth10", "roundcube:eth1"]
+    - endpoints: ["switch-lan:eth11", "mail-alumni:eth1"]

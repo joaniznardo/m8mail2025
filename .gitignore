@@ -1,0 +1,33 @@
+# Containerlab
+clab-*/
+.clab-*.yaml
+
+# Lab state
+.lab-stage
+
+# Certificats generats
+certs/
+
+# Credencials
+.env
+
+# Captures de paquets
+*.pcap
+*.pcapng
+
+# Mailcow runtime data
+configs/mailcow/etapa6/data/
+
+# Docker volumes
+data/
+
+# Editor
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db

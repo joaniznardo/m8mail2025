@@ -1,0 +1,23 @@
+. {
+    log
+    errors
+}
+
+demoasixcloud2025.cat {
+    file /etc/coredns/zones/db.demoasixcloud2025.cat
+    log
+    errors
+}
+
+50.26.10.in-addr.arpa {
+    file /etc/coredns/zones/db.50.26.10.in-addr.arpa
+    log
+    errors
+}
+
+. {
+    forward . 1.1.1.1 8.8.8.8
+    cache 30
+    log
+    errors
+}

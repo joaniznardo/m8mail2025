@@ -1,0 +1,81 @@
+# Configuració inicial de Stalwart Mail Server
+# Fitxer: configs/stalwart/etapa5/config.toml
+# Servidor: professorat.demoasixcloud2025.cat
+
+[server]
+hostname = "mail.professorat.demoasixcloud2025.cat"
+max-connections = 1024
+
+[server.listener.smtp]
+bind = ["0.0.0.0:25"]
+protocol = "smtp"
+
+[server.listener.submission]
+bind = ["0.0.0.0:587"]
+protocol = "smtp"
+
+[server.listener.submissions]
+bind = ["0.0.0.0:465"]
+protocol = "smtp"
+tls.implicit = true
+
+[server.listener.imap]
+bind = ["0.0.0.0:143"]
+protocol = "imap"
+
+[server.listener.imaps]
+bind = ["0.0.0.0:993"]
+protocol = "imap"
+tls.implicit = true
+
+[server.listener.http]
+bind = ["0.0.0.0:8080"]
+protocol = "http"
+
+[server.listener.https]
+bind = ["0.0.0.0:443"]
+protocol = "http"
+tls.implicit = true
+
+# TLS
+[certificate.default]
+cert = "/etc/ssl/mail/fullchain.pem"
+private-key = "/etc/ssl/mail/key.pem"
+default = true
+
+# Emmagatzematge
+[store.db]
+type = "rocksdb"
+path = "/opt/stalwart-mail/data"
+
+[store.blob]
+type = "rocksdb"
+path = "/opt/stalwart-mail/data"
+
+[store.fts]
+type = "rocksdb"
+path = "/opt/stalwart-mail/data"
+
+[store.lookup]
+type = "rocksdb"
+path = "/opt/stalwart-mail/data"
+
+[storage]
+data = "db"
+blob = "blob"
+fts = "fts"
+lookup = "lookup"
+directory = "internal"
+
+# Directori intern (comptes d'usuari)
+[directory.internal]
+type = "internal"
+store = "db"
+
+# Autenticació
+[authentication]
+fallback-admin.user = "admin"
+fallback-admin.secret = "Admin.2025"
+
+[session.auth]
+mechanisms = ["PLAIN", "LOGIN"]

@@ -1,0 +1,30 @@
+; Zona DNS inversa per a 10.26.50.0/24
+$ORIGIN 50.26.10.in-addr.arpa.
+$TTL 300
+
+@   IN  SOA ns1.demoasixcloud2025.cat. admin.demoasixcloud2025.cat. (
+        2025031101  ; Serial
+        3600        ; Refresh
+        600         ; Retry
+        86400       ; Expire
+        300         ; Minimum TTL
+    )
+
+@       IN  NS  ns1.demoasixcloud2025.cat.
+
+; --- Infraestructura ---
+1       IN  PTR router.demoasixcloud2025.cat.
+2       IN  PTR dns.demoasixcloud2025.cat.
+3       IN  PTR proxy.demoasixcloud2025.cat.
+
+; --- Servidors de correu ---
+10      IN  PTR mail.alumnat.demoasixcloud2025.cat.
+20      IN  PTR mail.professorat.demoasixcloud2025.cat.
+30      IN  PTR mail.alumni.demoasixcloud2025.cat.
+
+; --- Clients ---
+100     IN  PTR thunderbird1.demoasixcloud2025.cat.
+101     IN  PTR thunderbird2.demoasixcloud2025.cat.
+102     IN  PTR roundcube.demoasixcloud2025.cat.
+200     IN  PTR client-swaks.demoasixcloud2025.cat.
+250     IN  PTR acme.demoasixcloud2025.cat.

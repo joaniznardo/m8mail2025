@@ -1,0 +1,4 @@
+# docker-mailserver: àlies de correu
+# Format: alias@domini destí@domini
+postmaster@alumnat.demoasixcloud2025.cat alumne1@alumnat.demoasixcloud2025.cat
+abuse@alumnat.demoasixcloud2025.cat alumne1@alumnat.demoasixcloud2025.cat

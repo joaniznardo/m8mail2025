@@ -1,0 +1,122 @@
+# =============================================================================
+# Etapa 1: Correu bàsic amb docker-mailserver (sense TLS)
+# =============================================================================
+name: mailserver-lab
+
+mgmt:
+  network: mailserver-mgmt
+  ipv4-subnet: 172.20.26.0/24
+
+topology:
+  nodes:
+
+    # --- SWITCH-LAN ---
+    switch-lan:
+      kind: linux
+      image: mail-switch:latest
+      startup-delay: 5
+      exec:
+        - ip link set eth1 up
+        - ip link set eth2 up
+        - ip link set eth3 up
+        - ip link set eth4 up
+        - ip link set eth5 up
+
+    # --- ROUTER-FRR ---
+    router-frr:
+      kind: linux
+      image: frrouting/frr:latest
+      startup-delay: 10
+      binds:
+        - ../configs/frr/daemons:/etc/frr/daemons
+        - ../configs/frr/frr.conf:/etc/frr/frr.conf
+        - ../configs/frr/vtysh.conf:/etc/frr/vtysh.conf
+      exec:
+        - ip addr add 10.26.50.1/24 dev eth1
+        - ip link set eth1 up
+
+    # --- COREDNS ---
+    coredns:
+      kind: linux
+      image: coredns/coredns:latest
+      startup-delay: 5
+      cmd: "-conf /etc/coredns/Corefile"
+      binds:
+        - ../configs/coredns/Corefile:/etc/coredns/Corefile:ro
+        - ../configs/coredns/zones/:/etc/coredns/zones/:ro
+      exec:
+        - ip addr add 10.26.50.2/24 dev eth1
+        - ip link set eth1 up
+        - ip route add default via 10.26.50.1
+
+    # --- PROXY ---
+    proxy:
+      kind: linux
+      image: nginx:alpine
+      startup-delay: 5
+      binds:
+        - ../configs/nginx/etapa1.conf:/etc/nginx/conf.d/default.conf:ro
+      ports:
+        - 8080:80
+      exec:
+        - ip addr add 10.26.50.3/24 dev eth1
+        - ip link set eth1 up
+        - ip route add default via 10.26.50.1
+        - bash -c "echo 'nameserver 10.26.50.2' > /etc/resolv.conf"
+
+    # --- MAIL-ALUMNAT ---
+    mail-alumnat:
+      kind: linux
+      image: ghcr.io/docker-mailserver/docker-mailserver:latest
+      startup-delay: 15
+      env:
+        OVERRIDE_HOSTNAME: mail.alumnat.demoasixcloud2025.cat
+        POSTMASTER_ADDRESS: postmaster@alumnat.demoasixcloud2025.cat
+        ENABLE_CLAMAV: "0"
+        ENABLE_RSPAMD: "0"
+        ENABLE_OPENDKIM: "0"
+        ENABLE_OPENDMARC: "0"
+        ENABLE_POLICYD_SPF: "0"
+        ENABLE_AMAVIS: "0"
+        ENABLE_FAIL2BAN: "0"
+        ENABLE_POSTGREY: "0"
+        ENABLE_SPAMASSASSIN: "0"
+        SSL_TYPE: ""
+        PERMIT_DOCKER: network
+        ONE_DIR: "1"
+        LOG_LEVEL: debug
+      binds:
+        - ../configs/dms/etapa1/postfix-accounts.cf:/tmp/docker-mailserver/postfix-accounts.cf:ro
+        - ../configs/dms/etapa1/postfix-virtual.cf:/tmp/docker-mailserver/postfix-virtual.cf:ro
+      cap_add:
+        - NET_ADMIN
+        - SYS_PTRACE
+      exec:
+        - ip addr add 10.26.50.10/24 dev eth1
+        - ip link set eth1 up
+        - ip route add default via 10.26.50.1
+        - bash -c "echo 'nameserver 10.26.50.2' > /etc/resolv.conf"
+
+    # --- THUNDERBIRD1 ---
+    thunderbird1:
+      kind: linux
+      image: jlesage/thunderbird:latest
+      startup-delay: 20
+      shm-size: 1gb
+      env:
+        DISPLAY_WIDTH: "1280"
+        DISPLAY_HEIGHT: "768"
+      ports:
+        - 5800:5800
+      exec:
+        - ip addr add 10.26.50.100/24 dev eth1
+        - ip link set eth1 up
+        - ip route add default via 10.26.50.1
+        - bash -c "echo 'nameserver 10.26.50.2' > /etc/resolv.conf"
+
+  links:
+    - endpoints: ["switch-lan:eth1", "router-frr:eth1"]
+    - endpoints: ["switch-lan:eth2", "coredns:eth1"]
+    - endpoints: ["switch-lan:eth3", "proxy:eth1"]
+    - endpoints: ["switch-lan:eth4", "mail-alumnat:eth1"]
+    - endpoints: ["switch-lan:eth5", "thunderbird1:eth1"]
