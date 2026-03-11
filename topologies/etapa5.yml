@@ -70,6 +70,8 @@ topology:
       startup-delay: 5
       binds:
         - ../configs/nginx/etapa5.conf:/etc/nginx/conf.d/default.conf:ro
+        - ../configs/autoconfig/alumnat.xml:/etc/nginx/autoconfig/alumnat.xml:ro
+        - ../configs/autoconfig/professorat.xml:/etc/nginx/autoconfig/professorat.xml:ro
       ports:
         - 8080:80
       exec:

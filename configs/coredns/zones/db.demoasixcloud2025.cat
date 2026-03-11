@@ -43,9 +43,10 @@ client-swaks        IN  A       10.26.50.200
 acme                IN  A       10.26.50.250
 
 ; --- Autodiscover / Autoconfig per clients de correu ---
-autoconfig.alumnat      IN  CNAME   mail.alumnat
-autodiscover.alumnat    IN  CNAME   mail.alumnat
-autoconfig.professorat  IN  CNAME   mail.professorat
-autodiscover.professorat IN CNAME   mail.professorat
-autoconfig.alumni       IN  CNAME   mail.alumni
-autodiscover.alumni     IN  CNAME   mail.alumni
+; Apunten al proxy (10.26.50.3) que serveix els XML d'autoconfig
+autoconfig.alumnat      IN  A       10.26.50.3
+autodiscover.alumnat    IN  A       10.26.50.3
+autoconfig.professorat  IN  A       10.26.50.3
+autodiscover.professorat IN A       10.26.50.3
+autoconfig.alumni       IN  A       10.26.50.3
+autodiscover.alumni     IN  A       10.26.50.3

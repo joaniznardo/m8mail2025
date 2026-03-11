@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<clientConfig version="1.1">
+  <emailProvider id="professorat.demoasixcloud2025.cat">
+    <domain>professorat.demoasixcloud2025.cat</domain>
+    <displayName>Correu Professorat</displayName>
+    <displayShortName>Professorat</displayShortName>
+
+    <incomingServer type="imap">
+      <hostname>mail.professorat.demoasixcloud2025.cat</hostname>
+      <port>993</port>
+      <socketType>SSL</socketType>
+      <authentication>password-cleartext</authentication>
+      <username>%EMAILLOCALPART%</username>
+    </incomingServer>
+
+    <outgoingServer type="smtp">
+      <hostname>mail.professorat.demoasixcloud2025.cat</hostname>
+      <port>587</port>
+      <socketType>STARTTLS</socketType>
+      <authentication>password-cleartext</authentication>
+      <username>%EMAILLOCALPART%</username>
+    </outgoingServer>
+  </emailProvider>
+</clientConfig>
