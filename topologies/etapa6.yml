@@ -128,10 +128,10 @@ topology:
       image: stalwartlabs/stalwart:latest
       startup-delay: 15
       binds:
-        - ../configs/stalwart/etapa5/:/opt/stalwart-mail/:rw
+        - ../configs/stalwart/etapa5/config.toml:/opt/stalwart/etc/config.toml:rw
         - ../certs/professorat/:/etc/ssl/mail/:ro
       ports:
-        - 8443:443
+        - 8444:443
 
     # --- MAIL-ALUMNI ---
     # Placeholder per a Mailcow (alumni.demoasixcloud2025.cat)
@@ -198,11 +198,12 @@ topology:
       image: roundcube/roundcubemail:latest
       startup-delay: 20
       env:
-        ROUNDCUBEMAIL_DEFAULT_HOST: "10.26.50.20"
-        ROUNDCUBEMAIL_DEFAULT_PORT: "143"
-        ROUNDCUBEMAIL_SMTP_SERVER: "10.26.50.20"
+        ROUNDCUBEMAIL_DEFAULT_HOST: "ssl://10.26.50.20"
+        ROUNDCUBEMAIL_DEFAULT_PORT: "993"
+        ROUNDCUBEMAIL_SMTP_SERVER: "tls://10.26.50.20"
         ROUNDCUBEMAIL_SMTP_PORT: "587"
-        ROUNDCUBEMAIL_USERNAME_DOMAIN: professorat.demoasixcloud2025.cat
+      binds:
+        - ../configs/roundcube/custom.inc.php:/var/roundcube/config/custom.inc.php:ro
       ports:
         - 8081:80
 

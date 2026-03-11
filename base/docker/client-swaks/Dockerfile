@@ -1,8 +1,9 @@
 FROM alpine:3.20
 
 RUN apk add --no-cache \
-    swaks \
     perl \
+    perl-net-ssleay \
+    perl-io-socket-ssl \
     curl \
     bind-tools \
     tcpdump \
@@ -10,8 +11,9 @@ RUN apk add --no-cache \
     iproute2 \
     iputils \
     bash \
-    nmap-ncat \
-    mailx
+    netcat-openbsd \
+    && curl -o /usr/local/bin/swaks https://raw.githubusercontent.com/jetmore/swaks/develop/swaks \
+    && chmod +x /usr/local/bin/swaks
 
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh

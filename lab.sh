@@ -198,6 +198,23 @@ _setup_dkim() {
     ok "docker exec ${container} cat /tmp/docker-mailserver/opendkim/keys/alumnat.demoasixcloud2025.cat/mail.txt"
 }
 
+_setup_stalwart() {
+    local setup_script="${SCRIPT_DIR}/configs/stalwart/etapa5/setup-stalwart.sh"
+    local swaks_container="clab-${LAB_NAME}-client-swaks"
+
+    if [ ! -f "$setup_script" ]; then
+        warn "Script de setup de Stalwart no trobat: $setup_script"
+        return
+    fi
+
+    info "Configurant Stalwart (des de ${swaks_container})..."
+
+    # Copiar l'script dins del contenidor client-swaks i executar-lo allà
+    # perquè el host no té ruta a la xarxa del lab (10.26.50.0/24)
+    docker cp "$setup_script" "${swaks_container}:/tmp/setup-stalwart.sh"
+    docker exec "${swaks_container}" bash /tmp/setup-stalwart.sh
+}
+
 # --- Comandes principals ---
 
 cmd_build() {
@@ -270,19 +287,14 @@ cmd_setup() {
         5)
             _setup_dms_accounts
             _setup_dkim
-            # Setup Stalwart
-            if [ -f "${SCRIPT_DIR}/configs/stalwart/etapa5/setup-stalwart.sh" ]; then
-                info "Configurant Stalwart..."
-                bash "${SCRIPT_DIR}/configs/stalwart/etapa5/setup-stalwart.sh"
-            fi
+            # Setup Stalwart (s'executa des de client-swaks perquè el host no té ruta al lab)
+            _setup_stalwart
             ok "Setup etapa 5 completat"
             ;;
         6)
             _setup_dms_accounts
             _setup_dkim
-            if [ -f "${SCRIPT_DIR}/configs/stalwart/etapa5/setup-stalwart.sh" ]; then
-                bash "${SCRIPT_DIR}/configs/stalwart/etapa5/setup-stalwart.sh"
-            fi
+            _setup_stalwart
             info "Mailcow requereix configuració manual addicional."
             info "Consulta les instruccions de l'etapa 6."
             ok "Setup etapa 6 completat"
