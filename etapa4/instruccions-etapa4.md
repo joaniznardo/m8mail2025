@@ -38,7 +38,7 @@ Host Linux (tu)
     Servidor receptor → consulta DNS TXT (mail._domainkey) → obté clau pública → verifica signatura
 
   Registres DNS nous (Cloudflare):
-    alumnat.demoasixcloud2025.cat          TXT  "v=spf1 mx ~all"
+    alumnat.demoasixcloud2025.cat          TXT  "v=spf1 ip4:10.26.50.0/24 mx ~all"
     mail._domainkey.alumnat.(...)          TXT  "v=DKIM1; k=rsa; p=..."
     _dmarc.alumnat.demoasixcloud2025.cat   TXT  "v=DMARC1; p=none; rua=..."
 ```
@@ -133,11 +133,12 @@ Accedeix al panell de Cloudflare i crea el registre:
 |------|-------|
 | **Tipus** | TXT |
 | **Nom** | `alumnat.demoasixcloud2025.cat` |
-| **Contingut** | `v=spf1 mx ~all` |
+| **Contingut** | `v=spf1 ip4:10.26.50.0/24 mx ~all` |
 | **TTL** | Auto |
 
 **Explicació del registre:**
 - `v=spf1` — versió del protocol SPF
+- `ip4:10.26.50.0/24` — autoritza tots els servidors de la xarxa del laboratori
 - `mx` — autoritza els servidors definits als registres MX del domini
 - `~all` — *softfail*: els correus des de servidors no autoritzats es marquen com a sospitosos (però no es rebutgen)
 
@@ -202,7 +203,7 @@ dig @10.26.50.2 alumnat.demoasixcloud2025.cat TXT +short
 
 Sortida esperada:
 ```
-"v=spf1 mx ~all"
+"v=spf1 ip4:10.26.50.0/24 mx ~all"
 ```
 
 ### 8.2 Verificar DKIM

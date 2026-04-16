@@ -48,3 +48,9 @@ tracer.log.type = "log"
 tracer.stdout.enable = true
 tracer.stdout.level = "debug"
 tracer.stdout.type = "stdout"
+
+# --- TLS sortint: acceptar certificats no vàlids (entorn de laboratori) ---
+queue.tls.default.allow-invalid-certs = true
+queue.tls.default.starttls = "optional"
+queue.tls.default.dane = "disable"
+queue.tls.default.mta-sts = "disable"

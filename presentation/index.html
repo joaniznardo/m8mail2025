@@ -863,19 +863,16 @@ roundcube:
 
     <!-- ETAPA 6 -->
     <section>
-        <h3><span class="badge badge-6">Etapa 6</span> Mailcow</h3>
+        <h3><span class="badge badge-6">Etapa 6</span> Mailcow — Visió general</h3>
         <div class="columns">
             <div class="col small-text">
-                <p><strong>Arquitectura multi-contenidor:</strong></p>
+                <p><strong>Repte principal:</strong> Integrar un stack Docker Compose
+                (~12 contenidors) dins una topologia Containerlab.</p>
                 <ul>
-                    <li>postfix-mailcow (SMTP)</li>
-                    <li>dovecot-mailcow (IMAP)</li>
-                    <li>nginx-mailcow (web)</li>
-                    <li>mysql-mailcow (BD)</li>
-                    <li>redis-mailcow (cache)</li>
-                    <li>rspamd-mailcow (spam)</li>
-                    <li>sogo-mailcow (webmail)</li>
-                    <li>... i més</li>
+                    <li>Containerlab usa xarxa <code>10.26.50.0/24</code></li>
+                    <li>Mailcow crea la seva pròpia xarxa <code>172.22.1.0/24</code></li>
+                    <li>Cal un <strong>pont</strong> entre ambdues xarxes</li>
+                    <li>El node <code>mail-alumni</code> (.30) actua com a gateway</li>
                 </ul>
             </div>
             <div class="col">
@@ -884,21 +881,339 @@ roundcube:
 ./lab.sh deploy 6
 ./lab.sh setup 6
 
-# El node mail-alumni
-# (10.26.50.30) actua com a
-# punt d'entrada per l'stack
-# complet de Mailcow
-
-# Registres DNS a Cloudflare:
-# MX  alumni.demo... →
-#     mail.alumni.demo...
-# TXT alumni.demo... →
-#     v=spf1 mx ~all
-# TXT _dmarc.alumni.demo... →
-#     v=DMARC1; p=none
+# Contenidors Mailcow principals:
+# postfix-mailcow  (172.22.1.253)
+# dovecot-mailcow  (172.22.1.250)
+# nginx-mailcow    (172.22.1.11)
+# mysql-mailcow    (BD)
+# redis-mailcow    (cache)
+# rspamd-mailcow   (spam)
+# sogo-mailcow     (webmail)
                 </code></pre>
             </div>
         </div>
+    </section>
+
+    <section>
+        <h3><span class="badge badge-6">Etapa 6</span> El problema de xarxa</h3>
+        <div class="diagram">
+<pre>
+  Containerlab network (10.26.50.0/24)         Mailcow network (172.22.1.0/24)
+  ┌─────────────────────────┐                  ┌──────────────────────────────┐
+  │  switch-lan             │                  │  br-mailcow (bridge Docker)  │
+  │  ┌───────┐ ┌──────────┐│                  │  ┌────────┐ ┌─────────┐     │
+  │  │router │ │mail-alumni││    ???           │  │postfix │ │dovecot  │     │
+  │  │ .1    │ │ .30      ││◄──────────────►  │  │ .253   │ │ .250    │     │
+  │  └───────┘ └──────────┘│                  │  └────────┘ └─────────┘     │
+  │  ┌───────┐ ┌──────────┐│                  │  ┌────────┐ ┌─────────┐     │
+  │  │coredns│ │thunderb. ││                  │  │nginx   │ │rspamd   │     │
+  │  │ .2    │ │  .100    ││                  │  │ .11    │ │         │     │
+  │  └───────┘ └──────────┘│                  │  └────────┘ └─────────┘     │
+  └─────────────────────────┘                  └──────────────────────────────┘
+
+  docker network connect → FALLA! ("error renaming interface eth1: file exists")
+  Containerlab ja utilitza eth1 per les seves connexions.
+</pre>
+        </div>
+    </section>
+
+    <section>
+        <h3><span class="badge badge-6">Etapa 6</span> Solució: veth pair + DNAT</h3>
+        <div class="diagram">
+<pre>
+  mail-alumni (10.26.50.30)
+  ┌──────────────────────────────────────────────┐
+  │  eth1 (10.26.50.30)  ←── Containerlab        │
+  │                                               │
+  │  eth2 (172.22.1.30)  ←── veth pair manual    │
+  │     │                                         │
+  │  iptables DNAT:                               │
+  │     :25  → 172.22.1.253 (postfix)            │
+  │     :587 → 172.22.1.253 (postfix)            │
+  │     :143 → 172.22.1.250 (dovecot)            │
+  │     :993 → 172.22.1.250 (dovecot)            │
+  │     :8080→ 172.22.1.11  (nginx/webUI)        │
+  │                                               │
+  │  iptables MASQUERADE en eth2                  │
+  └──────────────────────────────────────────────┘
+          │ veth pair
+          ▼
+  ┌──────────────────┐
+  │ br-mailcow       │
+  │ (Docker bridge)  │
+  │  postfix .253    │
+  │  dovecot .250    │
+  │  nginx   .11     │
+  └──────────────────┘
+</pre>
+        </div>
+    </section>
+
+    <section>
+        <h3><span class="badge badge-6">Etapa 6</span> Codi de la connexió veth</h3>
+        <pre><code class="language-bash" data-trim>
+# 1. Crear el parell veth (host ↔ contenidor)
+ip link add mcow-alumni-h type veth peer name eth2
+
+# 2. Connectar un extrem al bridge de Mailcow
+BRIDGE=$(docker network inspect mailcowdockerized_mailcow \
+    -f '{{.Options.com.docker.network.bridge.name}}')
+ip link set mcow-alumni-h master "$BRIDGE"
+ip link set mcow-alumni-h up
+
+# 3. Moure l'altre extrem al namespace del contenidor
+PID=$(docker inspect -f '{{.State.Pid}}' \
+    clab-mailserver-lab-mail-alumni)
+ip link set eth2 netns "$PID"
+
+# 4. Configurar IP dins el contenidor
+nsenter -t "$PID" -n ip addr add 172.22.1.30/24 dev eth2
+nsenter -t "$PID" -n ip link set eth2 up
+        </code></pre>
+    </section>
+
+    <section>
+        <h3><span class="badge badge-6">Etapa 6</span> Regles iptables (DNAT)</h3>
+        <pre><code class="language-bash" data-trim>
+# Dins el namespace de mail-alumni:
+# Redirigir ports d'entrada cap als contenidors Mailcow
+
+# SMTP (transfer i submission)
+iptables -t nat -A PREROUTING -i eth1 -p tcp --dport 25 \
+    -j DNAT --to-destination 172.22.1.253:25
+iptables -t nat -A PREROUTING -i eth1 -p tcp --dport 587 \
+    -j DNAT --to-destination 172.22.1.253:587
+
+# IMAP
+iptables -t nat -A PREROUTING -i eth1 -p tcp --dport 143 \
+    -j DNAT --to-destination 172.22.1.250:143
+iptables -t nat -A PREROUTING -i eth1 -p tcp --dport 993 \
+    -j DNAT --to-destination 172.22.1.250:993
+
+# Web UI
+iptables -t nat -A PREROUTING -i eth1 -p tcp --dport 8080 \
+    -j DNAT --to-destination 172.22.1.11:8080
+
+# MASQUERADE perquè els contenidors vegin la IP del gateway
+iptables -t nat -A POSTROUTING -o eth2 -j MASQUERADE
+        </code></pre>
+    </section>
+
+    <section>
+        <h3><span class="badge badge-6">Etapa 6</span> Automatització via API</h3>
+        <pre><code class="language-bash" data-trim>
+MAILCOW_API="http://172.22.1.11:8080/api/v1"
+API_KEY="mailcow-lab-api-key-2025"
+
+# Crear domini
+curl -s -X POST "$MAILCOW_API/add/domain" \
+    -H "X-API-Key: $API_KEY" \
+    -H "Content-Type: application/json" \
+    -d '{"domain":"alumni.demoasixcloud2025.cat","active":"1"}'
+
+# Crear bústia
+curl -s -X POST "$MAILCOW_API/add/mailbox" \
+    -H "X-API-Key: $API_KEY" \
+    -d '{"local_part":"exalumne1",
+         "domain":"alumni.demoasixcloud2025.cat",
+         "password":"Exalumne1.2025","active":"1"}'
+
+# DKIM es genera automàticament amb el domini
+# Selector per defecte: "dkim", clau RSA 2048 bits
+curl -s "$MAILCOW_API/get/dkim/alumni.demoasixcloud2025.cat" \
+    -H "X-API-Key: $API_KEY"
+        </code></pre>
+    </section>
+
+    <section>
+        <h3><span class="badge badge-6">Etapa 6</span> Notes tècniques importants</h3>
+        <div class="warning-box">
+            <strong>No fer <code>docker restart</code></strong> en contenidors Containerlab!
+            Trenca els enllaços de xarxa (veth pairs). Utilitzar <code>docker stop/start</code> o reiniciar serveis interns.
+        </div>
+        <div class="highlight-box">
+            <strong>DH params:</strong> Mailcow requereix paràmetres Diffie-Hellman de <strong>2048 bits</strong>.
+            Amb 1024 bits, OpenSSL rebutja la connexió: <code>"dh key too small"</code>.
+        </div>
+        <div class="highlight-box">
+            <strong>Autenticació Dovecot:</strong> Mailcow usa una cadena Lua → HTTPS → PHP → MySQL.
+            La comanda <code>doveadm auth test</code> pot ser enganyosa (usa <code>auth_passdb_lookup</code>
+            en lloc de <code>auth_password_verify</code>).
+        </div>
+    </section>
+</section>
+
+<!-- ============================================================ -->
+<!-- SECCIÓ 7b: SPF/DKIM/DMARC als 3 servidors                   -->
+<!-- ============================================================ -->
+<section>
+    <section>
+        <h2>Autenticació als 3 servidors</h2>
+        <h4>SPF, DKIM, DMARC — Comparativa</h4>
+    </section>
+
+    <section>
+        <h3>Registres DNS per domini</h3>
+        <table class="small-text">
+            <thead><tr><th>Registre</th><th>alumnat (DMS)</th><th>professorat (Stalwart)</th><th>alumni (Mailcow)</th></tr></thead>
+            <tbody>
+                <tr>
+                    <td><strong>SPF</strong></td>
+                    <td>v=spf1 ip4:10.26.50.0/24 mx ~all</td>
+                    <td>v=spf1 ip4:10.26.50.0/24 mx ~all</td>
+                    <td>v=spf1 ip4:10.26.50.0/24 mx ~all</td>
+                </tr>
+                <tr>
+                    <td><strong>DKIM selector</strong></td>
+                    <td><code>mail</code></td>
+                    <td><code>202604r</code> (auto)</td>
+                    <td><code>dkim</code> (auto)</td>
+                </tr>
+                <tr>
+                    <td><strong>DMARC</strong></td>
+                    <td>p=none; rua=postmaster@...</td>
+                    <td>p=none; rua=postmaster@...</td>
+                    <td>p=none; rua=postmaster@...</td>
+                </tr>
+            </tbody>
+        </table>
+        <div class="highlight-box">
+            <strong>SPF amb ip4:</strong> Al laboratori cal <code>ip4:10.26.50.0/24</code> perquè els servidors
+            envien des d'IPs de la xarxa del lab, no des de les IPs públiques dels registres MX.
+        </div>
+    </section>
+
+    <section>
+        <h3>DMS (Rspamd) — Particularitats</h3>
+        <ul class="small-text">
+            <li><strong>Rspamd salta SPF/DMARC</strong> per usuaris autenticats (<code>is_skip_local_or_authed()</code>).
+                Cal forçar: <code>check_authed = true</code> a <code>spf.conf</code> i <code>dmarc.conf</code></li>
+            <li><strong>settings.conf</strong> per defecte limita a DKIM signing.
+                Cal sobreescriure amb un <code>apply {}</code> buit</li>
+            <li><strong>use_esld = false</strong> — Rspamd normalitza subdominis al eSLD per defecte
+                (alumnat.demo... → demoasixcloud2025.cat). Cal desactivar-ho</li>
+            <li><strong>local_networks = "127.0.0.0/8"</strong> — Perquè les IPs del lab (10.26.50.x) es tractin com a externes</li>
+            <li>La capçalera <code>Authentication-Results</code> requereix un <strong>plugin Lua personalitzat</strong>
+                per mostrar correctament els resultats DKIM</li>
+        </ul>
+    </section>
+
+    <section>
+        <h3>Stalwart — Particularitats</h3>
+        <ul class="small-text">
+            <li><strong>API REST</strong> per gestionar DKIM:
+                <code>POST /api/dkim</code> crea signatures,
+                <code>GET /api/dns/records/{domain}</code> retorna registres DNS</li>
+            <li><strong>Selector auto-generat:</strong> format <code>YYYYMMr</code> (ex: <code>202604r</code>)</li>
+            <li><strong>No afegeix Authentication-Results</strong> per entrega local —
+                cal verificar DKIM/SPF amb eines externes (swaks + capçaleres)</li>
+            <li><strong>Contrasenyes:</strong> requereixen prefix <code>{PLAIN}</code> a l'API</li>
+            <li><strong>Autenticació:</strong> només accepta noms curts (<code>profe1</code>, no l'email complet)</li>
+        </ul>
+    </section>
+
+    <section>
+        <h3>Mailcow — Particularitats</h3>
+        <ul class="small-text">
+            <li><strong>DKIM automàtic:</strong> es genera al crear el domini via API o Web UI.
+                Selector <code>dkim</code>, RSA 2048 bits</li>
+            <li><strong>API REST completa:</strong> <code>/api/v1/add/domain</code>,
+                <code>/api/v1/add/mailbox</code>, <code>/api/v1/get/dkim/{domain}</code></li>
+            <li><strong>Rspamd integrat</strong> amb configuració per defecte funcional
+                (no cal els ajustos de DMS)</li>
+            <li><strong>Web admin:</strong> <code>admin</code> / <code>moohoo</code></li>
+            <li><strong>Cadena d'autenticació:</strong> Dovecot → Lua → HTTPS → PHP → MySQL</li>
+        </ul>
+        <pre><code class="language-bash" data-trim>
+# Verificar DKIM signing amb swaks
+swaks --to exalumne1@alumni.demoasixcloud2025.cat \
+      --from exalumne1@alumni.demoasixcloud2025.cat \
+      --server 10.26.50.30 --port 587 --tls \
+      --auth LOGIN --auth-user exalumne1@alumni.demoasixcloud2025.cat \
+      --auth-password 'Exalumne1.2025'
+        </code></pre>
+    </section>
+</section>
+
+<!-- ============================================================ -->
+<!-- SECCIÓ: PREGUNTES DE REFLEXIÓ I COMPRENSIÓ                   -->
+<!-- ============================================================ -->
+<section>
+    <section>
+        <h2>Preguntes de reflexió i comprensió</h2>
+    </section>
+
+    <section>
+        <h3>Protocols i arquitectura</h3>
+        <ol class="small-text">
+            <li>Per què existeixen dos ports per a SMTP submission (587 i 465)?
+                Quin és preferible i per què?</li>
+            <li>Explica la diferència entre un MTA i un MDA. Quins programes fan cada rol
+                a DMS, Stalwart i Mailcow?</li>
+            <li>Per què IMAP ha desplaçat POP3 en la majoria d'entorns?
+                En quin escenari encara podria ser útil POP3?</li>
+            <li>Què passa exactament quan un MTA vol lliurar un correu a un domini desconegut?
+                Quines consultes DNS fa i en quin ordre?</li>
+        </ol>
+    </section>
+
+    <section>
+        <h3>TLS i seguretat</h3>
+        <ol class="small-text">
+            <li>Què és un <em>downgrade attack</em> contra STARTTLS? Com es pot mitigar?</li>
+            <li>Per què al laboratori (Etapa 1) es poden capturar credencials amb tcpdump?
+                Què canvia a l'Etapa 2?</li>
+            <li>Mailcow rebutja paràmetres DH de 1024 bits amb l'error <code>"dh key too small"</code>.
+                Per què és important usar 2048 bits o més?</li>
+            <li>Quina diferència hi ha entre un certificat autosignat i un de Let's Encrypt
+                des del punt de vista d'un client de correu?</li>
+        </ol>
+    </section>
+
+    <section>
+        <h3>SPF, DKIM i DMARC</h3>
+        <ol class="small-text">
+            <li>Si un domini té <code>v=spf1 mx ~all</code> però el correu s'envia des d'una IP
+                que no és la del registre MX, quin serà el resultat SPF? I si fos <code>-all</code>?</li>
+            <li>Per què al laboratori cal <code>ip4:10.26.50.0/24</code> al registre SPF
+                en lloc de només <code>mx</code>?</li>
+            <li>Per què Rspamd (a DMS) salta la verificació SPF per a usuaris autenticats?
+                Quins riscos comporta? Com ho hem solucionat?</li>
+            <li>Quina és la diferència entre <code>p=none</code>, <code>p=quarantine</code> i
+                <code>p=reject</code> a DMARC? Per què comencem amb <code>p=none</code>?</li>
+            <li>Si un atacant falsifica el <code>From:</code> d'un correu, quina combinació
+                de SPF+DKIM+DMARC ho detectaria?</li>
+        </ol>
+    </section>
+
+    <section>
+        <h3>Xarxes i Containerlab</h3>
+        <ol class="small-text">
+            <li>Per què <code>docker network connect</code> falla amb el contenidor mail-alumni?
+                Quina és l'arrel del problema?</li>
+            <li>Explica pas a pas com funciona la solució del veth pair:
+                què fa cada comanda i per què és necessària.</li>
+            <li>Per què cal MASQUERADE a eth2 de mail-alumni?
+                Què passaria si no hi fos?</li>
+            <li>Per què no es pot fer <code>docker restart</code> en un contenidor de Containerlab?
+                Quina alternativa hi ha?</li>
+            <li>Quina diferència hi ha entre un <em>Linux bridge</em> del host
+                i el switch del laboratori (contenidor amb bridge-utils)?</li>
+        </ol>
+    </section>
+
+    <section>
+        <h3>Comparativa de servidors</h3>
+        <ol class="small-text">
+            <li>DMS usa 1 contenidor, Stalwart 1 i Mailcow ~12. Quins avantatges
+                i inconvenients té cada aproximació?</li>
+            <li>Stalwart genera DKIM automàticament. DMS requereix <code>setup config dkim</code>.
+                Mailcow ho fa via API/UI. Quin enfocament prefereixes per a producció i per què?</li>
+            <li>Per què Stalwart només accepta noms curts (<code>profe1</code>) per autenticar-se
+                però DMS i Mailcow accepten l'adreça completa?</li>
+            <li>Si haguessis de triar un servidor per a una empresa petita (10 usuaris)
+                i un per a una universitat (5000 usuaris), quin triaries en cada cas? Justifica-ho.</li>
+        </ol>
     </section>
 </section>
 

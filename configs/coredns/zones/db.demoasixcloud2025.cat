@@ -4,7 +4,7 @@ $ORIGIN demoasixcloud2025.cat.
 $TTL 300
 
 @   IN  SOA ns1.demoasixcloud2025.cat. admin.demoasixcloud2025.cat. (
-        2025031101  ; Serial
+        2026041606  ; Serial
         3600        ; Refresh
         600         ; Retry
         86400       ; Expire
@@ -50,3 +50,18 @@ autoconfig.professorat  IN  A       10.26.50.3
 autodiscover.professorat IN A       10.26.50.3
 autoconfig.alumni       IN  A       10.26.50.3
 autodiscover.alumni     IN  A       10.26.50.3
+
+; --- Registres SPF, DKIM i DMARC per a alumnat ---
+alumnat                       IN  TXT     "v=spf1 ip4:10.26.50.0/24 mx ~all"
+mail._domainkey.alumnat IN  TXT     ( "v=DKIM1; k=rsa; p=MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAhZOaEeWGqITMs0QEsGT3IyXui+0vVjjJOpJYKY0adt6FmXG5nnZSl3+TmBJ8LIa2Rv2mObmo7pPAVSvddBgD3mbtf2FdspU+OPtX0PoP7yPs527RWGMGAE2fzeBzlRuX/LbSaym18dE0cq/gGpGN2oPazb5w8NYPE7Q7M31929EG+UF6JhIMd3Doce6FBaEy5" "JxEoz2JZHorH6FTLswRWOYl6ZuJGD+awa3VHSVkBNuNbn9njKXuFNCiFVsfN8ONVI+Y0HiwNo/FTqyDjF/o5NvqcqCypKJf5VAICjWL4N8sR8p7bS0aaeD7fIbF1yxR2802VKiyje7ay2UsZZTTaQIDAQAB" )
+_dmarc.alumnat                IN  TXT     "v=DMARC1; p=none; rua=mailto:postmaster@alumnat.demoasixcloud2025.cat"
+
+; --- Registres SPF, DKIM i DMARC per a professorat ---
+professorat                       IN  TXT     "v=spf1 ip4:10.26.50.0/24 mx ~all"
+202604r._domainkey.professorat           IN  TXT     ( "v=DKIM1; k=rsa; h=sha256; p=MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAoSM0jptupwXHeCNCVhkDeG8JPFq0ho0LmhzmfJ5Ep9/8wmY135N9jdkxuH2mranFUuTTDLVJ1w37BBU2roLuIHunYPDeSiV3mo9F+4VdZanI5iyq7q2Q43CtI0zj6gLLvdyXTJHSrAdYYIJrmEC9A/IwIUpC/z0V12LR/0ov2pPOJEBthdIxdBZ" "6c2jnUrDpT7c8WfJg/irA6iQMQnldkVtUEvVhw7M+JJagiwOQ+2PyM9fyUkYB5lGo1xVSg0PMQ3BDYUdZVyvj7zZJL/xGLkmE0R/fMPJIe+7LnFQEkOMhDviZjSBi6mmtTXMUlTyOIu0AI3PPU2CVkwt3XDQEKQIDAQAB" )
+_dmarc.professorat                IN  TXT     "v=DMARC1; p=none; rua=mailto:postmaster@professorat.demoasixcloud2025.cat"
+
+; --- Registres SPF, DKIM i DMARC per a alumni ---
+alumni                       IN  TXT     "v=spf1 ip4:10.26.50.0/24 mx ~all"
+dkim._domainkey.alumni  IN  TXT     ( "v=DKIM1;k=rsa;t=s;s=email;p=MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAv/fmcsudOQXTdvNSbOL5Sv3001JwuFtRlq5HTDs/4KApFnd0tsFWcaBUXVLr74tlxEjUKrn34/sBmwp25+5AhFHwxXBC6yAaSrsBR6Dnu2wwvVPEdPjkwhTs7GH7INoyvm9bGAtwJNDXqT7xyM+mf1uFlc7hPPdgoTlJ9nKmMQ3mDwIy4Z9bqcUueTJWeVojJbd7VxH29Oig0PHoMl1i+94mbV5Szf8Ml3aFI357bIY+w9alSH46XI" "AYskXaVCc1ZWtfOJgDHZ/qryrbM8sMkIrsPm6rCs3o7eH9CKX61lysls8FEVklJ6evz2Qx+oIQGD0KurBPwQhN4FwBhUB+9QIDAQAB" )
+_dmarc.alumni                IN  TXT     "v=DMARC1; p=none; rua=mailto:postmaster@alumni.demoasixcloud2025.cat"

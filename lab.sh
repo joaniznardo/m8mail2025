@@ -201,11 +201,126 @@ _setup_dms_accounts() {
 
 _setup_dkim() {
     local container="clab-${LAB_NAME}-mail-alumnat"
-    info "Generant claus DKIM per a alumnat.demoasixcloud2025.cat..."
+    info "Configurant DKIM per a alumnat.demoasixcloud2025.cat..."
 
-    docker exec "$container" setup config dkim keysize 2048 domain alumnat.demoasixcloud2025.cat 2>/dev/null || true
-    ok "DKIM configurat. Publica el registre DNS des de:"
-    ok "docker exec ${container} cat /tmp/docker-mailserver/opendkim/keys/alumnat.demoasixcloud2025.cat/mail.txt"
+    # Les claus DKIM ja estan pre-generades a configs/dms/etapa4/rspamd/dkim/
+    # i la configuració de Rspamd a configs/dms/etapa4/rspamd/override.d/dkim_signing.conf
+    # NO executem 'setup config dkim' perquè sobreescriu les claus i el config pre-generats
+
+    # Afegir automàticament els registres SPF, DKIM i DMARC a CoreDNS
+    # (cal fer-ho ABANS de reiniciar Rspamd perquè check_pubkey=true)
+    _setup_dns_dkim_records
+
+    # Reiniciar Rspamd per assegurar que carrega la configuració i claus correctes
+    info "Reiniciant Rspamd per carregar la configuració DKIM..."
+    docker exec "$container" supervisorctl restart rspamd 2>/dev/null || true
+    sleep 3
+    ok "DKIM configurat i Rspamd reiniciat."
+}
+
+_setup_dns_dkim_records() {
+    local zone_file="${SCRIPT_DIR}/configs/coredns/zones/db.demoasixcloud2025.cat"
+    local dkim_public_key_file="${SCRIPT_DIR}/configs/dms/etapa4/rspamd/dkim/rsa-2048-mail-alumnat.demoasixcloud2025.cat.public.dns.txt"
+    local domain="alumnat"
+    local selector="mail"
+
+    info "Actualitzant registres DNS (SPF, DKIM, DMARC) a CoreDNS..."
+
+    # Comprovar que el fitxer de zona existeix
+    if [ ! -f "$zone_file" ]; then
+        error "Fitxer de zona no trobat: $zone_file"
+        return 1
+    fi
+
+    # Comprovar que la clau pública DKIM existeix
+    if [ ! -f "$dkim_public_key_file" ]; then
+        error "Clau pública DKIM no trobada: $dkim_public_key_file"
+        info "Assegura't que les claus DKIM estan generades a configs/dms/etapa4/rspamd/dkim/"
+        return 1
+    fi
+
+    # Llegir la clau pública DKIM (una sola línia, sense espais finals)
+    local dkim_value
+    dkim_value=$(tr -d '\n\r' < "$dkim_public_key_file" | sed 's/[[:space:]]*$//')
+
+    # Dividir el valor DKIM en fragments de 255 caràcters per complir el límit DNS TXT
+    # CoreDNS accepta format multi-string amb parèntesis: ( "part1" "part2" )
+    local dkim_txt_record
+    local dkim_len=${#dkim_value}
+    if [ "$dkim_len" -gt 255 ]; then
+        local parts=""
+        local pos=0
+        local chunk_size=255
+        while [ $pos -lt "$dkim_len" ]; do
+            local chunk="${dkim_value:$pos:$chunk_size}"
+            if [ -z "$parts" ]; then
+                parts="\"${chunk}\""
+            else
+                parts="${parts} \"${chunk}\""
+            fi
+            pos=$((pos + chunk_size))
+        done
+        dkim_txt_record="${selector}._domainkey.${domain} IN  TXT     ( ${parts} )"
+    else
+        dkim_txt_record="${selector}._domainkey.${domain} IN  TXT     \"${dkim_value}\""
+    fi
+
+    # Comprovar si els registres ja existeixen (evitar duplicats)
+    if grep -q "${selector}._domainkey.${domain}" "$zone_file" 2>/dev/null; then
+        warn "Registres SPF/DKIM/DMARC ja presents a la zona DNS. S'actualitzaran."
+        # Eliminar la secció existent de registres SPF/DKIM/DMARC
+        local tmp_file
+        tmp_file=$(mktemp)
+        # Eliminar des de la línia de comentari fins a la pròxima línia buida (o final de fitxer)
+        awk '/^; --- Registres SPF, DKIM i DMARC/{skip=1; next} /^$/{if(skip){skip=0; next}} !skip' "$zone_file" > "$tmp_file"
+        # Eliminar línies buides al final del fitxer
+        sed -i -e :a -e '/^[[:space:]]*$/{ $d; N; ba' -e '}' "$tmp_file"
+        cp "$tmp_file" "$zone_file"
+        rm -f "$tmp_file"
+    fi
+
+    # Incrementar el serial del SOA (format YYYYMMDDNN)
+    local current_serial
+    current_serial=$(grep -oP '\d{10}(?=\s*;\s*Serial)' "$zone_file")
+    if [ -n "$current_serial" ]; then
+        local today
+        today=$(date +%Y%m%d)
+        local serial_date="${current_serial:0:8}"
+        local serial_num="${current_serial:8:2}"
+        if [ "$serial_date" = "$today" ]; then
+            serial_num=$(printf "%02d" $(( 10#$serial_num + 1 )))
+        else
+            serial_num="01"
+        fi
+        local new_serial="${today}${serial_num}"
+        sed -i "s/${current_serial}\(\s*;\s*Serial\)/${new_serial}\1/" "$zone_file"
+        info "Serial de la zona actualitzat: ${current_serial} -> ${new_serial}"
+    fi
+
+    # Afegir els registres SPF, DKIM i DMARC al final del fitxer de zona
+    {
+        echo ""
+        echo "; --- Registres SPF, DKIM i DMARC per a ${domain} ---"
+        echo "${domain}                       IN  TXT     \"v=spf1 ip4:10.26.50.0/24 mx ~all\""
+        echo "${dkim_txt_record}"
+        echo "_dmarc.${domain}                IN  TXT     \"v=DMARC1; p=none; rua=mailto:postmaster@${domain}.demoasixcloud2025.cat\""
+    } >> "$zone_file"
+
+    ok "Registres DNS afegits a la zona CoreDNS:"
+    ok "  SPF:   ${domain}.demoasixcloud2025.cat TXT \"v=spf1 ip4:10.26.50.0/24 mx ~all\""
+    ok "  DKIM:  ${selector}._domainkey.${domain}.demoasixcloud2025.cat TXT \"v=DKIM1; k=rsa; p=...\""
+    ok "  DMARC: _dmarc.${domain}.demoasixcloud2025.cat TXT \"v=DMARC1; p=none; ...\""
+
+    # CoreDNS recarrega automàticament la zona gràcies al plugin "reload 5s" al Corefile.
+    # NO reiniciem el contenidor perquè docker restart trenca els enllaços de containerlab.
+    local coredns_container="clab-${LAB_NAME}-coredns"
+    if docker ps -q -f "name=${coredns_container}" | grep -q .; then
+        info "CoreDNS recarregarà la zona automàticament en uns segons (reload plugin)..."
+        sleep 6
+        ok "Registres DNS actius a CoreDNS"
+    else
+        info "CoreDNS no actiu. Els registres s'aplicaran al pròxim desplegament."
+    fi
 }
 
 _setup_stalwart() {
@@ -223,6 +338,274 @@ _setup_stalwart() {
     # perquè el host no té ruta a la xarxa del lab (10.26.50.0/24)
     docker cp "$setup_script" "${swaks_container}:/tmp/setup-stalwart.sh"
     docker exec "${swaks_container}" bash /tmp/setup-stalwart.sh
+
+    # Obtenir els registres DNS generats per Stalwart i afegir-los a CoreDNS
+    _setup_dns_stalwart_records
+}
+
+_setup_dns_stalwart_records() {
+    local zone_file="${SCRIPT_DIR}/configs/coredns/zones/db.demoasixcloud2025.cat"
+    local swaks_container="clab-${LAB_NAME}-client-swaks"
+    local domain="professorat"
+    local fqdn="professorat.demoasixcloud2025.cat"
+
+    info "Afegint registres SPF/DKIM/DMARC de ${fqdn} a CoreDNS..."
+
+    # Llegir el fitxer JSON de registres DNS generat per setup-stalwart.sh
+    local dns_json
+    dns_json=$(docker exec "${swaks_container}" cat /tmp/stalwart-dns-records.json 2>/dev/null || true)
+
+    if [ -z "$dns_json" ]; then
+        warn "No s'han trobat registres DNS de Stalwart. S'afegiran registres SPF i DMARC bàsics."
+        local dkim_record=""
+    else
+        # Extreure el registre DKIM TXT (conté _domainkey)
+        # Format JSON: {"data":[{"type":"TXT","name":"selector._domainkey.domain.","content":"v=DKIM1; ..."},...]}
+        local dkim_record
+        dkim_record=$(echo "$dns_json" | python3 -c "
+import json, sys
+data = json.load(sys.stdin)
+for rec in data.get('data', []):
+    if rec.get('type') == 'TXT' and '_domainkey' in rec.get('name', ''):
+        name = rec['name'].rstrip('.')
+        # Convertir FQDN a relatiu dins la zona demoasixcloud2025.cat
+        name = name.replace('.demoasixcloud2025.cat', '')
+        content = rec['content']
+        # Dividir en fragments de 255 caràcters si cal
+        if len(content) > 255:
+            parts = []
+            for i in range(0, len(content), 255):
+                parts.append('\"' + content[i:i+255] + '\"')
+            print(f'{name:<40} IN  TXT     ( {\" \".join(parts)} )')
+        else:
+            print(f'{name:<40} IN  TXT     \"{content}\"')
+        break
+" 2>/dev/null || true)
+    fi
+
+    # Comprovar si els registres ja existeixen (evitar duplicats)
+    if grep -q "_domainkey.${domain}" "$zone_file" 2>/dev/null || grep -q "; --- Registres SPF, DKIM i DMARC per a ${domain}" "$zone_file" 2>/dev/null; then
+        warn "Registres SPF/DKIM/DMARC de ${domain} ja presents a la zona DNS. S'actualitzaran."
+        local tmp_file
+        tmp_file=$(mktemp)
+        awk "/^; --- Registres SPF, DKIM i DMARC per a ${domain}/{skip=1; next} /^\$/{if(skip){skip=0; next}} !skip" "$zone_file" > "$tmp_file"
+        sed -i -e :a -e '/^[[:space:]]*$/{ $d; N; ba' -e '}' "$tmp_file"
+        cp "$tmp_file" "$zone_file"
+        rm -f "$tmp_file"
+    fi
+
+    # Incrementar el serial del SOA
+    local current_serial
+    current_serial=$(grep -oP '\d{10}(?=\s*;\s*Serial)' "$zone_file")
+    if [ -n "$current_serial" ]; then
+        local today
+        today=$(date +%Y%m%d)
+        local serial_date="${current_serial:0:8}"
+        local serial_num="${current_serial:8:2}"
+        if [ "$serial_date" = "$today" ]; then
+            serial_num=$(printf "%02d" $(( 10#$serial_num + 1 )))
+        else
+            serial_num="01"
+        fi
+        local new_serial="${today}${serial_num}"
+        sed -i "s/${current_serial}\(\s*;\s*Serial\)/${new_serial}\1/" "$zone_file"
+        info "Serial de la zona actualitzat: ${current_serial} -> ${new_serial}"
+    fi
+
+    # Afegir registres SPF, DKIM i DMARC per a professorat
+    {
+        echo ""
+        echo "; --- Registres SPF, DKIM i DMARC per a ${domain} ---"
+        echo "${domain}                       IN  TXT     \"v=spf1 ip4:10.26.50.0/24 mx ~all\""
+        if [ -n "$dkim_record" ]; then
+            echo "${dkim_record}"
+        else
+            warn "No s'ha pogut obtenir el registre DKIM de Stalwart"
+        fi
+        echo "_dmarc.${domain}                IN  TXT     \"v=DMARC1; p=none; rua=mailto:postmaster@${fqdn}\""
+    } >> "$zone_file"
+
+    ok "Registres DNS de ${domain} afegits a CoreDNS"
+
+    # Esperar que CoreDNS recarregui
+    local coredns_container="clab-${LAB_NAME}-coredns"
+    if docker ps -q -f "name=${coredns_container}" | grep -q .; then
+        info "CoreDNS recarregarà la zona automàticament en uns segons (reload plugin)..."
+        sleep 6
+        ok "Registres DNS de ${domain} actius a CoreDNS"
+    fi
+}
+
+_setup_mailcow() {
+    local alumni_container="clab-${LAB_NAME}-mail-alumni"
+    local mailcow_dir="/opt/mailcow"
+    local mailcow_api="http://localhost:8082/api/v1"
+    local mailcow_api_key="mailcow-lab-api-key-2025"
+    local domain="alumni.demoasixcloud2025.cat"
+    local zone_file="${SCRIPT_DIR}/configs/coredns/zones/db.demoasixcloud2025.cat"
+
+    info "Configurant Mailcow per a ${domain}..."
+
+    # --- 1. Verificar que Mailcow està en marxa ---
+    if ! docker compose -f "${mailcow_dir}/docker-compose.yml" --project-directory "${mailcow_dir}" ps --format json 2>/dev/null | grep -q postfix; then
+        info "Iniciant Mailcow..."
+        docker compose -f "${mailcow_dir}/docker-compose.yml" --project-directory "${mailcow_dir}" up -d
+        info "Esperant que Mailcow estigui llest..."
+        sleep 15
+    fi
+    ok "Mailcow en marxa"
+
+    # --- 2. Generar DH params si no existeixen (2048 bits) ---
+    if [ ! -f "${mailcow_dir}/data/assets/ssl/dhparams.pem" ]; then
+        info "Generant paràmetres DH (2048 bits)..."
+        openssl dhparam -out "${mailcow_dir}/data/assets/ssl/dhparams.pem" 2048
+        # Reiniciar dovecot perquè carregui els DH params
+        docker restart "$(docker compose -f "${mailcow_dir}/docker-compose.yml" --project-directory "${mailcow_dir}" ps -q dovecot-mailcow)"
+        sleep 5
+        ok "Paràmetres DH generats i dovecot reiniciat"
+    fi
+
+    # --- 3. Connectar mail-alumni al Docker network de Mailcow (veth pair) ---
+    local alumni_pid
+    alumni_pid=$(docker inspect "$alumni_container" --format '{{.State.Pid}}')
+    local mailcow_bridge="br-mailcow"
+
+    # Comprovar si ja està connectat (eth2 existent)
+    if nsenter -t "$alumni_pid" -n ip addr show eth2 2>/dev/null | grep -q "172.22.1.30"; then
+        info "mail-alumni ja connectat a la xarxa Mailcow (eth2)"
+    else
+        info "Connectant mail-alumni a la xarxa Mailcow..."
+        # Crear veth pair
+        ip link add mcow-alumni-h type veth peer name mcow-alumni-c 2>/dev/null || true
+        ip link set mcow-alumni-h master "$mailcow_bridge"
+        ip link set mcow-alumni-h up
+        ip link set mcow-alumni-c netns "$alumni_pid"
+        nsenter -t "$alumni_pid" -n ip link set mcow-alumni-c name eth2
+        nsenter -t "$alumni_pid" -n ip addr add 172.22.1.30/24 dev eth2
+        nsenter -t "$alumni_pid" -n ip link set eth2 up
+        ok "mail-alumni connectat a la xarxa Mailcow (172.22.1.30)"
+    fi
+
+    # --- 4. Configurar iptables DNAT (forwarding de ports) ---
+    # Postfix: 172.22.1.253, Dovecot: 172.22.1.250, Nginx: 172.22.1.11
+    nsenter -t "$alumni_pid" -n sysctl -qw net.ipv4.ip_forward=1
+
+    # Netejar regles anteriors si n'hi ha
+    nsenter -t "$alumni_pid" -n iptables -t nat -F 2>/dev/null || true
+    nsenter -t "$alumni_pid" -n iptables -F FORWARD 2>/dev/null || true
+
+    # DNAT: eth1 (lab) -> mailcow containers (eth2)
+    nsenter -t "$alumni_pid" -n iptables -t nat -A PREROUTING -i eth1 -p tcp --dport 25  -j DNAT --to-destination 172.22.1.253:25
+    nsenter -t "$alumni_pid" -n iptables -t nat -A PREROUTING -i eth1 -p tcp --dport 587 -j DNAT --to-destination 172.22.1.253:587
+    nsenter -t "$alumni_pid" -n iptables -t nat -A PREROUTING -i eth1 -p tcp --dport 143 -j DNAT --to-destination 172.22.1.250:143
+    nsenter -t "$alumni_pid" -n iptables -t nat -A PREROUTING -i eth1 -p tcp --dport 993 -j DNAT --to-destination 172.22.1.250:993
+    nsenter -t "$alumni_pid" -n iptables -t nat -A PREROUTING -i eth1 -p tcp --dport 8080 -j DNAT --to-destination 172.22.1.11:8080
+    nsenter -t "$alumni_pid" -n iptables -t nat -A POSTROUTING -o eth2 -j MASQUERADE
+    nsenter -t "$alumni_pid" -n iptables -A FORWARD -i eth1 -o eth2 -j ACCEPT
+    nsenter -t "$alumni_pid" -n iptables -A FORWARD -i eth2 -o eth1 -m state --state RELATED,ESTABLISHED -j ACCEPT
+    ok "Forwarding de ports configurat (SMTP/IMAP -> Mailcow)"
+
+    # --- 5. Crear domini a Mailcow via API ---
+    local api_response
+    api_response=$(curl -s -X POST "${mailcow_api}/add/domain" \
+        -H "X-API-Key: ${mailcow_api_key}" \
+        -H "Content-Type: application/json" \
+        -d "{\"domain\":\"${domain}\",\"description\":\"Domini alumni\",\"aliases\":400,\"mailboxes\":10,\"defquota\":1024,\"maxquota\":2048,\"restart_sogo\":1,\"active\":1}" 2>&1)
+    if echo "$api_response" | grep -q "domain_added"; then
+        ok "Domini ${domain} creat a Mailcow"
+    elif echo "$api_response" | grep -q "is_now_active\|domain_exists"; then
+        info "Domini ${domain} ja existeix a Mailcow"
+    else
+        warn "Resposta inesperada creant domini: ${api_response}"
+    fi
+
+    # --- 6. Crear bústia exalumne1 ---
+    api_response=$(curl -s -X POST "${mailcow_api}/add/mailbox" \
+        -H "X-API-Key: ${mailcow_api_key}" \
+        -H "Content-Type: application/json" \
+        -d "{\"local_part\":\"exalumne1\",\"domain\":\"${domain}\",\"name\":\"Ex-alumne 1\",\"password\":\"Exalumne1.2025\",\"password2\":\"Exalumne1.2025\",\"quota\":1024,\"active\":1}" 2>&1)
+    if echo "$api_response" | grep -q "mailbox_added"; then
+        ok "Bústia exalumne1@${domain} creada"
+    elif echo "$api_response" | grep -q "object_exists"; then
+        info "Bústia exalumne1@${domain} ja existeix"
+    else
+        warn "Resposta inesperada creant bústia: ${api_response}"
+    fi
+
+    # --- 7. Obtenir clau DKIM i afegir a CoreDNS ---
+    local dkim_response
+    dkim_response=$(curl -s "${mailcow_api}/get/dkim/${domain}" \
+        -H "X-API-Key: ${mailcow_api_key}" 2>&1)
+    local dkim_selector
+    dkim_selector=$(echo "$dkim_response" | python3 -c "import sys,json; print(json.load(sys.stdin)['dkim_selector'])" 2>/dev/null || echo "")
+    local dkim_txt
+    dkim_txt=$(echo "$dkim_response" | python3 -c "import sys,json; print(json.load(sys.stdin)['dkim_txt'])" 2>/dev/null || echo "")
+
+    if [ -z "$dkim_selector" ] || [ -z "$dkim_txt" ]; then
+        warn "No s'ha pogut obtenir la clau DKIM de Mailcow. Caldrà afegir-la manualment."
+        return 0
+    fi
+
+    info "DKIM selector: ${dkim_selector}, afegint registre DNS..."
+
+    # Netejar registres anteriors d'alumni
+    if grep -q "; --- Registres SPF, DKIM i DMARC per a alumni" "$zone_file" 2>/dev/null; then
+        local tmp_file
+        tmp_file=$(mktemp)
+        awk '/^; --- Registres SPF, DKIM i DMARC per a alumni/{skip=1; next} /^$/{if(skip){skip=0; next}} !skip' "$zone_file" > "$tmp_file"
+        sed -i -e :a -e '/^[[:space:]]*$/{ $d; N; ba' -e '}' "$tmp_file"
+        cp "$tmp_file" "$zone_file"
+        rm -f "$tmp_file"
+    fi
+
+    # Incrementar serial
+    local current_serial
+    current_serial=$(grep -oP '\d{10}(?=\s*;\s*Serial)' "$zone_file")
+    if [ -n "$current_serial" ]; then
+        local today
+        today=$(date +%Y%m%d)
+        local serial_date="${current_serial:0:8}"
+        local serial_num="${current_serial:8:2}"
+        if [ "$serial_date" = "$today" ]; then
+            serial_num=$(printf "%02d" $(( 10#$serial_num + 1 )))
+        else
+            serial_num="01"
+        fi
+        local new_serial="${today}${serial_num}"
+        sed -i "s/${current_serial}\(\s*;\s*Serial\)/${new_serial}\1/" "$zone_file"
+        info "Serial de la zona actualitzat: ${current_serial} -> ${new_serial}"
+    fi
+
+    # Dividir DKIM TXT en trossos de 255 caràcters per a DNS
+    local dkim_part1 dkim_part2
+    if [ ${#dkim_txt} -gt 255 ]; then
+        dkim_part1="${dkim_txt:0:255}"
+        dkim_part2="${dkim_txt:255}"
+        local dkim_dns_value="( \"${dkim_part1}\" \"${dkim_part2}\" )"
+    else
+        local dkim_dns_value="\"${dkim_txt}\""
+    fi
+
+    # Afegir registres SPF, DKIM i DMARC
+    {
+        echo ""
+        echo "; --- Registres SPF, DKIM i DMARC per a alumni ---"
+        echo "alumni                       IN  TXT     \"v=spf1 ip4:10.26.50.0/24 mx ~all\""
+        echo "${dkim_selector}._domainkey.alumni  IN  TXT     ${dkim_dns_value}"
+        echo "_dmarc.alumni                IN  TXT     \"v=DMARC1; p=none; rua=mailto:postmaster@${domain}\""
+    } >> "$zone_file"
+
+    ok "Registres DNS d'alumni (SPF + DKIM + DMARC) afegits a CoreDNS"
+
+    # Esperar que CoreDNS recarregui
+    local coredns_container="clab-${LAB_NAME}-coredns"
+    if docker ps -q -f "name=${coredns_container}" | grep -q .; then
+        info "CoreDNS recarregarà la zona automàticament en uns segons (reload plugin)..."
+        sleep 6
+        ok "Registres DNS d'alumni actius a CoreDNS"
+    fi
+
+    ok "Mailcow configurat correctament per a ${domain}"
 }
 
 # --- Comandes principals ---
@@ -292,22 +675,25 @@ cmd_setup() {
             _setup_dms_accounts
             _setup_dkim
             ok "Setup etapa 4 completat"
-            info "Recorda publicar els registres SPF, DKIM i DMARC a Cloudflare"
+            info "Registres SPF, DKIM i DMARC afegits automàticament a CoreDNS"
+            info "Recorda publicar també els registres a Cloudflare si cal resolució externa"
             ;;
         5)
             _setup_dms_accounts
             _setup_dkim
             # Setup Stalwart (s'executa des de client-swaks perquè el host no té ruta al lab)
+            # Inclou creació de DKIM i registres DNS per a professorat
             _setup_stalwart
             ok "Setup etapa 5 completat"
+            info "Registres SPF, DKIM i DMARC afegits per a alumnat i professorat"
             ;;
         6)
             _setup_dms_accounts
             _setup_dkim
             _setup_stalwart
-            info "Mailcow requereix configuració manual addicional."
-            info "Consulta les instruccions de l'etapa 6."
+            _setup_mailcow
             ok "Setup etapa 6 completat"
+            info "Registres SPF, DKIM i DMARC afegits per a alumnat, professorat i alumni"
             ;;
         *)
             error "Etapa desconeguda: $stage"
