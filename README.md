@@ -1,4 +1,4 @@
-# Laboratori de Servidors de Correu Electronic
+# Laboratori de Servidors de Correu Electronic 2026
 
 Laboratori educatiu de servidors de correu electronic desplegat amb **Containerlab**, pensat per a alumnat d'**ASIX** (Administracio de Sistemes Informatics en Xarxa). Treballa amb 3 servidors de correu (docker-mailserver, Stalwart, Mailcow) i 3 subdominis del domini `demoasixcloud2025.cat`.
 
